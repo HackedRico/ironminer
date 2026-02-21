@@ -1,7 +1,9 @@
-"""Safety Agent — PPE detection, violations, zone adherence.
+"""Safety Agent — deterministic OSHA rule checks + LLM summary.
 
-Sends Video Agent zone analysis data + OSHA safety knowledge to an LLM
-and parses the response into a structured SafetyReport.
+Phase 1: Iterate structured classifiers from the Video Agent and apply
+         OSHA rules directly on booleans/numbers.  No LLM needed.
+Phase 2: Send the computed violations list to an LLM for an executive
+         summary and prioritized recommendations only.
 """
 from __future__ import annotations
 
@@ -12,165 +14,393 @@ from datetime import datetime, timezone
 from app.agents.base import BaseAgent
 from app.models.alert import AlertSeverity
 from app.models.analysis import SafetyReport, SafetyViolation
-from app.models.video import VideoProcessingResult
+from app.models.video import (
+    VideoProcessingResult,
+    ZoneAnalysis,
+    WorkerDetection,
+)
 from app.services.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
-OSHA_SYSTEM_PROMPT = """\
-You are an OSHA-certified construction safety analyst. You review spatial zone \
-analysis data from construction site video footage and produce structured safety \
-violation reports.
+# ── LLM system prompt (Phase 2 only — narration, not detection) ─────────────
 
-Apply the following OSHA standards when evaluating the data:
+SUMMARY_SYSTEM_PROMPT = """\
+You are a construction safety report writer. You do NOT decide what is or \
+isn't a violation — that has already been determined by automated rule checks.
 
-**PPE Requirements (29 CFR 1926.100-106)**
-- Hard hats required in all active work zones and areas exposed to overhead hazards
-- High-visibility vests required near vehicle traffic and roadway edges
-- Safety glasses/goggles required during cutting, grinding, and powder-actuated tool use
-- Hearing protection required near high-noise operations
-- Fall protection harnesses required when working at heights above 6 ft
+You will receive:
+1. A JSON list of detected safety violations with OSHA references, severity, \
+zone, and workers affected.
+2. A timeline of temporal events observed on site.
 
-**Fall Protection (29 CFR 1926.500-503)**
-- Guardrails, safety nets, or personal fall arrest systems (PFAS) required at 6 ft+
-- Scaffold edges must have guardrails or workers must be tied off
-- Ladder safety: maintain 3-point contact at all times
+Your job:
+- Write a clear 2-3 paragraph executive summary of the safety situation.
+- Prioritize findings by severity and number of workers affected.
+- Include actionable recommendations for the site superintendent.
+- Reference specific zones and OSHA standards mentioned in the violations.
 
-**Scaffolding Safety (29 CFR 1926.450-454)**
-- All planks must be secured and fully decked
-- Scaffold access via proper ladder or stairway
-- No work under unsecured scaffold components
-
-**Electrical Safety (29 CFR 1926.400-449)**
-- Lockout/tagout (LOTO) required before working on electrical panels
-- Maintain safe clearances from live circuits
-- No extension cords through standing water
-
-**Struck-by Hazards (29 CFR 1926.1400-1442)**
-- No workers under suspended loads
-- Exclusion barricades required within crane swing radius
-- Signal persons must have clear line of sight to crane operator
-
-**Housekeeping & Egress (29 CFR 1926.25, 1926.34)**
-- Egress paths must remain clear at all times
-- Material staging must not block emergency vehicle access
-- Stacked materials must be stable and cross-braced above 6 ft
-
-**Hot Work (29 CFR 1926.352-354)**
-- Fire watch required when hot work is within 35 ft of combustibles
-- Fire extinguisher must be within 20 ft of hot work area
-
-**Multi-trade Coordination**
-- Trades operating in close proximity need barrier separation or scheduling offsets
-- Overhead work above other crews requires netting or exclusion zones
-
----
-
-Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
+Respond with ONLY valid JSON (no markdown, no explanation):
 {
-  "violations": [
-    {
-      "zone": "<zone name>",
-      "type": "<ppe_missing|zone_breach|clearance_issue|blocked_corridor>",
-      "description": "<specific violation with OSHA reference>",
-      "severity": "<high|medium|low>",
-      "workers_affected": <number>
-    }
-  ],
-  "ppe_compliance": {
-    "<zone name>": <true if compliant, false if not>
-  },
-  "zone_adherence": {
-    "<zone name>": <true if zones properly maintained, false if not>
-  },
-  "overall_risk": "<low|medium|high|critical>",
-  "summary": "<2-3 paragraph executive summary with key findings and OSHA references>"
+  "summary": "<executive summary paragraphs>"
 }
 """
 
 
-def _build_user_prompt(video_result: VideoProcessingResult) -> str:
-    """Format VideoProcessingResult data into a structured user prompt."""
-    sections = [f"Site ID: {video_result.site_id}", f"Job ID: {video_result.job_id}", ""]
+# ── Phase 1: Deterministic OSHA rule checks ─────────────────────────────────
 
-    sections.append("## Zone Analyses")
-    for zone, analysis in video_result.zone_analyses.items():
-        sections.append(f"\n### {zone}\n{analysis}")
 
-    sections.append("\n## Entity Relationships")
-    for key, desc in video_result.entity_relationships.items():
-        sections.append(f"\n### {key}\n{desc}")
+def _check_worker_rules(
+    worker: WorkerDetection,
+    zone: ZoneAnalysis,
+) -> list[SafetyViolation]:
+    """Apply per-worker OSHA rules. Returns violations found."""
+    violations: list[SafetyViolation] = []
+    zone_name = zone.zone_name
 
-    if video_result.temporal_chain:
-        sections.append("\n## Temporal Chain (chronological observations)")
-        for entry in video_result.temporal_chain:
-            sections.append(f"- {entry}")
+    # Hard hat required in all active work zones
+    if not worker.ppe.hard_hat:
+        v = SafetyViolation(
+            zone=zone_name,
+            type="ppe_missing",
+            description=(
+                f"Worker {worker.worker_id} ({worker.trade}) missing hard hat. "
+                f"29 CFR 1926.100 — hard hats required in all active work zones."
+            ),
+            severity=AlertSeverity.medium,
+            workers_affected=1,
+        )
+        # Escalate if in crane swing radius
+        if worker.in_crane_swing_radius:
+            v.severity = AlertSeverity.high
+            v.type = "ppe_missing"
+            v.description = (
+                f"Worker {worker.worker_id} ({worker.trade}) in crane swing radius "
+                f"without hard hat. 29 CFR 1926.100 + 1926.1400 — struck-by + PPE violation."
+            )
+        violations.append(v)
 
-    sections.append(
-        "\n---\nAnalyze the above data for OSHA safety violations. "
-        "Return your findings as JSON."
+    # Fall protection: elevation > 6 ft without harness
+    if worker.elevation_ft > 6 and not worker.ppe.fall_harness:
+        violations.append(SafetyViolation(
+            zone=zone_name,
+            type="zone_breach",
+            description=(
+                f"Worker {worker.worker_id} ({worker.trade}) at {worker.elevation_ft} ft "
+                f"without fall harness. 29 CFR 1926.501 — fall protection required above 6 ft."
+            ),
+            severity=AlertSeverity.high,
+            workers_affected=1,
+        ))
+
+    # Near edge without harness
+    if worker.near_edge and not worker.ppe.fall_harness:
+        violations.append(SafetyViolation(
+            zone=zone_name,
+            type="zone_breach",
+            description=(
+                f"Worker {worker.worker_id} ({worker.trade}) near unprotected edge "
+                f"without fall harness. 29 CFR 1926.501(b)(1)."
+            ),
+            severity=AlertSeverity.high,
+            workers_affected=1,
+        ))
+
+    # Harness not tied off at elevation
+    if worker.elevation_ft > 6 and worker.ppe.fall_harness and not worker.ppe.harness_tied_off:
+        violations.append(SafetyViolation(
+            zone=zone_name,
+            type="zone_breach",
+            description=(
+                f"Worker {worker.worker_id} ({worker.trade}) at {worker.elevation_ft} ft "
+                f"with harness not tied off. 29 CFR 1926.502(d) — PFAS must be anchored."
+            ),
+            severity=AlertSeverity.high,
+            workers_affected=1,
+        ))
+
+    # Under suspended load
+    if worker.under_suspended_load:
+        violations.append(SafetyViolation(
+            zone=zone_name,
+            type="clearance_issue",
+            description=(
+                f"Worker {worker.worker_id} ({worker.trade}) standing under suspended load. "
+                f"29 CFR 1926.1431 — no workers permitted under suspended loads."
+            ),
+            severity=AlertSeverity.high,
+            workers_affected=1,
+        ))
+
+    # Ladder without 3-point contact
+    if worker.on_ladder and worker.three_point_contact is False:
+        violations.append(SafetyViolation(
+            zone=zone_name,
+            type="zone_breach",
+            description=(
+                f"Worker {worker.worker_id} ({worker.trade}) on ladder without 3-point contact. "
+                f"29 CFR 1926.1053(b)(1)."
+            ),
+            severity=AlertSeverity.medium,
+            workers_affected=1,
+        ))
+
+    return violations
+
+
+def _check_zone_rules(zone: ZoneAnalysis) -> list[SafetyViolation]:
+    """Apply zone-level OSHA rules (equipment, hazards, egress, materials, congestion)."""
+    violations: list[SafetyViolation] = []
+    zone_name = zone.zone_name
+
+    # Equipment rules
+    for eq in zone.equipment:
+        if eq.type == "crane" and not eq.signal_person_line_of_sight:
+            violations.append(SafetyViolation(
+                zone=zone_name,
+                type="clearance_issue",
+                description=(
+                    f"Crane {eq.equipment_id} — signal person lacks clear line of sight "
+                    f"to operator. 29 CFR 1926.1419."
+                ),
+                severity=AlertSeverity.high,
+                workers_affected=1,
+            ))
+
+    # Hazard rules
+    for hz in zone.hazards:
+        if hz.type == "hot_work" and not hz.fire_watch_present:
+            violations.append(SafetyViolation(
+                zone=zone_name,
+                type="clearance_issue",
+                description=(
+                    f"Hot work ({hz.description}) without fire watch. "
+                    f"29 CFR 1926.352(e) — fire watch required near combustibles."
+                ),
+                severity=AlertSeverity.high,
+                workers_affected=len(zone.workers),
+            ))
+        if hz.type == "electrical_exposure" and not hz.loto_signage_visible:
+            violations.append(SafetyViolation(
+                zone=zone_name,
+                type="clearance_issue",
+                description=(
+                    f"Electrical exposure ({hz.description}) without LOTO signage. "
+                    f"29 CFR 1926.417 — lockout/tagout required."
+                ),
+                severity=AlertSeverity.high,
+                workers_affected=len(zone.workers),
+            ))
+
+    # Egress rules
+    for eg in zone.egress:
+        if eg.blocked:
+            sev = AlertSeverity.high if eg.emergency_access else AlertSeverity.medium
+            violations.append(SafetyViolation(
+                zone=zone_name,
+                type="blocked_corridor",
+                description=(
+                    f"Egress path {eg.path_id} blocked by {eg.blocking_material or 'unknown'}. "
+                    f"{'Emergency vehicle access lane compromised. ' if eg.emergency_access else ''}"
+                    f"29 CFR 1926.34 — means of egress must remain clear."
+                ),
+                severity=sev,
+                workers_affected=len(zone.workers),
+            ))
+
+    # Material stacking
+    for ms in zone.material_stacks:
+        if ms.height_ft > 6 and not ms.cross_braced:
+            violations.append(SafetyViolation(
+                zone=zone_name,
+                type="clearance_issue",
+                description=(
+                    f"{ms.material_type.title()} stack at {ms.height_ft} ft without cross-bracing. "
+                    f"29 CFR 1926.250(a)(1) — stacked materials must be stable."
+                ),
+                severity=AlertSeverity.medium,
+                workers_affected=len(zone.workers),
+            ))
+
+    # Multi-trade congestion
+    if len(zone.trades_present) > 2 and zone.area_sqft is not None and zone.area_sqft < 500:
+        violations.append(SafetyViolation(
+            zone=zone_name,
+            type="zone_breach",
+            description=(
+                f"{len(zone.trades_present)} trades ({', '.join(zone.trades_present)}) "
+                f"in {zone.area_sqft} sqft area. Multi-trade congestion creates coordination "
+                f"hazards. OSHA multi-employer worksite doctrine applies."
+            ),
+            severity=AlertSeverity.high,
+            workers_affected=len(zone.workers),
+        ))
+
+    return violations
+
+
+def _check_trade_proximity_rules(
+    result: VideoProcessingResult,
+) -> list[SafetyViolation]:
+    """Check trade proximity hazards across zones."""
+    violations: list[SafetyViolation] = []
+    zone_lookup = {z.zone_id: z.zone_name for z in result.zones}
+
+    for tp in result.trade_proximities:
+        if tp.overhead_work_above_crew and tp.separation_ft < 10:
+            zone_name = zone_lookup.get(tp.zone_id, tp.zone_id)
+            violations.append(SafetyViolation(
+                zone=zone_name,
+                type="clearance_issue",
+                description=(
+                    f"{tp.trade_a} working overhead above {tp.trade_b} crew with only "
+                    f"{tp.separation_ft} ft separation. {tp.description} "
+                    f"29 CFR 1926.759 — overhead protection required."
+                ),
+                severity=AlertSeverity.high,
+                workers_affected=2,
+            ))
+
+    return violations
+
+
+def _compute_compliance(result: VideoProcessingResult, violations: list[SafetyViolation]) -> tuple[dict[str, bool], dict[str, bool]]:
+    """Compute PPE compliance and zone adherence dicts from violations."""
+    violation_zones = {v.zone for v in violations}
+    ppe_violation_zones = {v.zone for v in violations if v.type == "ppe_missing"}
+
+    ppe_compliance = {}
+    zone_adherence = {}
+    for zone in result.zones:
+        ppe_compliance[zone.zone_name] = zone.zone_name not in ppe_violation_zones
+        zone_adherence[zone.zone_name] = zone.zone_name not in violation_zones
+
+    return ppe_compliance, zone_adherence
+
+
+def _compute_overall_risk(violations: list[SafetyViolation]) -> str:
+    """Deterministic risk level from violation counts/severities."""
+    if not violations:
+        return "low"
+
+    high_violations = [v for v in violations if v.severity == AlertSeverity.high]
+    high_workers = sum(v.workers_affected for v in high_violations)
+
+    if (high_workers >= 3 and high_violations) or len(violations) >= 5:
+        return "critical"
+    if high_violations:
+        return "high"
+    if any(v.severity == AlertSeverity.medium for v in violations):
+        return "medium"
+    return "low"
+
+
+def run_deterministic_checks(result: VideoProcessingResult) -> list[SafetyViolation]:
+    """Phase 1 — run all deterministic OSHA rules on structured classifiers."""
+    violations: list[SafetyViolation] = []
+
+    for zone in result.zones:
+        for worker in zone.workers:
+            violations.extend(_check_worker_rules(worker, zone))
+        violations.extend(_check_zone_rules(zone))
+
+    violations.extend(_check_trade_proximity_rules(result))
+    return violations
+
+
+# ── Phase 2: LLM summary ────────────────────────────────────────────────────
+
+
+def _build_summary_prompt(
+    violations: list[SafetyViolation],
+    result: VideoProcessingResult,
+) -> str:
+    """Build the user prompt for the LLM summary phase."""
+    v_dicts = [
+        {
+            "zone": v.zone,
+            "type": v.type,
+            "severity": v.severity.value if hasattr(v.severity, "value") else str(v.severity),
+            "description": v.description,
+            "workers_affected": v.workers_affected,
+        }
+        for v in violations
+    ]
+
+    temporal = [
+        {
+            "timestamp": te.timestamp,
+            "zone_id": te.zone_id,
+            "event_type": te.event_type,
+            "detail": te.detail,
+        }
+        for te in result.temporal_events
+    ]
+
+    return json.dumps(
+        {"violations": v_dicts, "temporal_events": temporal},
+        indent=2,
     )
-    return "\n".join(sections)
 
 
-def _parse_llm_response(raw: str, site_id: str) -> SafetyReport:
-    """Parse LLM JSON response into a SafetyReport. Falls back on error."""
-    # Strip markdown code fences if the LLM wraps the JSON
+def _parse_summary_response(raw: str) -> str:
+    """Extract the summary string from the LLM JSON response."""
     cleaned = raw.strip()
     if cleaned.startswith("```"):
-        # Remove opening fence (with optional language tag) and closing fence
         lines = cleaned.split("\n")
-        lines = lines[1:]  # drop opening ```json
+        lines = lines[1:]
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         cleaned = "\n".join(lines)
 
     try:
         data = json.loads(cleaned)
+        return data.get("summary", "")
     except json.JSONDecodeError:
-        logger.error("Failed to parse LLM response as JSON: %s", raw[:500])
-        return SafetyReport(
-            site_id=site_id,
-            summary=f"LLM returned non-JSON response. Raw output:\n{raw[:1000]}",
-            overall_risk="medium",
-            generated_at=datetime.now(timezone.utc),
-        )
+        logger.warning("LLM returned non-JSON summary, using raw text")
+        return raw.strip()
 
-    violations = []
-    for v in data.get("violations", []):
-        try:
-            violations.append(
-                SafetyViolation(
-                    zone=v["zone"],
-                    type=v["type"],
-                    description=v["description"],
-                    severity=AlertSeverity(v.get("severity", "medium")),
-                    workers_affected=int(v.get("workers_affected", 1)),
-                )
-            )
-        except (KeyError, ValueError) as exc:
-            logger.warning("Skipping malformed violation: %s (%s)", v, exc)
 
-    return SafetyReport(
-        site_id=site_id,
-        violations=violations,
-        ppe_compliance=data.get("ppe_compliance", {}),
-        zone_adherence=data.get("zone_adherence", {}),
-        overall_risk=data.get("overall_risk", "medium"),
-        summary=data.get("summary", ""),
-        generated_at=datetime.now(timezone.utc),
-    )
+# ── Agent class ──────────────────────────────────────────────────────────────
 
 
 class SafetyAgent(BaseAgent):
     async def process(
         self, site_id: str, video_result: VideoProcessingResult
     ) -> SafetyReport:
-        llm = get_llm_client()
-        user_prompt = _build_user_prompt(video_result)
+        # Phase 1 — deterministic OSHA rule checks (no LLM)
+        violations = run_deterministic_checks(video_result)
+        ppe_compliance, zone_adherence = _compute_compliance(video_result, violations)
+        overall_risk = _compute_overall_risk(violations)
 
-        logger.info("SafetyAgent: sending %d chars to LLM", len(user_prompt))
-        raw_response = await llm.chat(system=OSHA_SYSTEM_PROMPT, user=user_prompt)
-        logger.info("SafetyAgent: received %d chars from LLM", len(raw_response))
+        logger.info(
+            "SafetyAgent Phase 1: %d violations, risk=%s",
+            len(violations),
+            overall_risk,
+        )
 
-        return _parse_llm_response(raw_response, site_id)
+        # Phase 2 — LLM for executive summary only
+        summary = ""
+        try:
+            llm = get_llm_client()
+            user_prompt = _build_summary_prompt(violations, video_result)
+            logger.info("SafetyAgent Phase 2: sending %d chars to LLM", len(user_prompt))
+            raw_response = await llm.chat(system=SUMMARY_SYSTEM_PROMPT, user=user_prompt)
+            logger.info("SafetyAgent Phase 2: received %d chars from LLM", len(raw_response))
+            summary = _parse_summary_response(raw_response)
+        except Exception:
+            logger.exception("LLM summary failed — violations are still valid")
+            summary = (
+                f"[Auto-generated] {len(violations)} safety violations detected. "
+                f"Overall risk: {overall_risk}. See violations list for details."
+            )
+
+        return SafetyReport(
+            site_id=site_id,
+            violations=violations,
+            ppe_compliance=ppe_compliance,
+            zone_adherence=zone_adherence,
+            overall_risk=overall_risk,
+            summary=summary,
+            generated_at=datetime.now(timezone.utc),
+        )
