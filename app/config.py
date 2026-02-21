@@ -14,3 +14,6 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+VASTAI_API_KEY = os.getenv("VASTAI_API_KEY", "")
+VASTAI_BASE_URL = os.getenv("VASTAI_BASE_URL", "")
+VASTAI_MODEL_ID = os.getenv("VASTAI_MODEL_ID", "llava-hf/LLaVA-NeXT-Video-34B-hf")

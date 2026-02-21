@@ -215,14 +215,19 @@ pip install httpx==0.28.1
 docker compose up -d
 docker exec -it $(docker ps -q -f ancestor=ollama/ollama) ollama pull llama3.2
 
-# 3. Start backend
+# 3. Start backend (wait for startup complete)
 python -m uvicorn app.main:app --reload
+
+# Wait for: "INFO: Application startup complete."
+# This takes 3-5 seconds for FastAPI to initialize
 
 # 4. Run safety analysis
 curl -X POST http://localhost:8000/api/safety/analyze \
   -H 'Content-Type: application/json' \
   -d '{"site_id":"s1","video_job_id":"mock_vj_001"}'
 ```
+
+**Note:** If running backend + frontend together, you may see initial `ECONNREFUSED` errors in the Vite logs. These are harmless - the frontend auto-retries and succeeds once FastAPI finishes startup (~3-5 seconds).
 
 ### Expected response
 
