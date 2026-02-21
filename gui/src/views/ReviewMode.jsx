@@ -18,6 +18,7 @@ export default function ReviewMode() {
   const [zones, setZones] = useState([])
   const [alerts, setAlerts] = useState([])
   const [expandedAlert, setExpandedAlert] = useState(null)
+  const [expandedZone, setExpandedZone] = useState(null)
   const [usingMock, setUsingMock] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
 
@@ -148,7 +149,7 @@ export default function ReviewMode() {
                   Real-time worker density by zone. Bars show congestion level — red zones have overlapping trades that may cause delays or safety conflicts.
                 </div>
                 {zones.length > 0
-                  ? zones.map((z, i) => <ZoneRow key={i} zone={z} />)
+                  ? zones.map((z, i) => <ZoneRow key={i} zone={z} expanded={expandedZone === i} onToggle={() => setExpandedZone(expandedZone === i ? null : i)} />)
                   : <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>No zone data available for this site yet.</div>
                 }
               </div>
