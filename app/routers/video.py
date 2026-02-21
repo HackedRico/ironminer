@@ -9,11 +9,9 @@ from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPExce
 from typing import Optional
 
 from app.models.video import VideoJob, VideoProcessingResult
-from app.services.storage import VIDEO_JOBS
 from app.services import db
-from app.services.job_queue import create_job, get_job
-from app.services.storage import VIDEO_JOBS, VIDEO_RESULTS
 from app.services.job_queue import create_job, get_job, update_job
+from app.services.storage import VIDEO_JOBS, VIDEO_RESULTS
 from app.agents.video_agent import VideoAgent
 
 logger = logging.getLogger(__name__)
