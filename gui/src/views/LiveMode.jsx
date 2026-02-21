@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react'
 import LiveFeedCard from '../components/LiveFeedCard'
 import LiveStreamView from '../components/LiveStreamView'
+import LiveWorkerFeedCard from '../components/LiveStreamView/LiveWorkerFeedCard'
 import { fetchFeeds } from '../api/streaming'
-import { fetchAlerts } from '../api/alerts'
 import { fetchSites } from '../api/sites'
-import { MOCK_FEEDS, MOCK_ALERTS, MOCK_SITES } from '../utils/mockData'
+import { MOCK_FEEDS, MOCK_SITES } from '../utils/mockData'
 
 export default function LiveMode() {
   const [feeds, setFeeds] = useState([])
   const [selectedFeed, setSelectedFeed] = useState(null)
-  const [alerts, setAlerts] = useState([])
   const [sites, setSites] = useState([])
   const [usingMock, setUsingMock] = useState(false)
   const [livekitAvailable, setLivekitAvailable] = useState(false)
+  const [liveWorkerStreams, setLiveWorkerStreams] = useState(new Map())
+  const [selectedWorkerIdentity, setSelectedWorkerIdentity] = useState(null)
 
   useEffect(() => {
     fetchFeeds()
@@ -25,10 +26,6 @@ export default function LiveMode() {
         setFeeds(MOCK_FEEDS)
         setSelectedFeed(MOCK_FEEDS[0].id)
       })
-
-    fetchAlerts({ severity: 'high' })
-      .then(setAlerts)
-      .catch(() => setAlerts(MOCK_ALERTS.filter(a => a.severity === 'high')))
 
     fetchSites()
       .then(setSites)
@@ -51,8 +48,13 @@ export default function LiveMode() {
       {/* ── Main feed viewer (left column) ─────────────────────────────────── */}
       <div>
         {livekitAvailable ? (
-          // Real LiveKit stream — shows video grid + push-to-talk
-          <LiveStreamView site={site} selectedFeed={feed} />
+          <LiveStreamView
+            site={site}
+            selectedFeed={feed}
+            onWorkerStreamsChange={setLiveWorkerStreams}
+            selectedWorkerIdentity={selectedWorkerIdentity}
+            onSelectWorker={setSelectedWorkerIdentity}
+          />
         ) : (
           // Mock fallback — original UI preserved exactly
           <>
@@ -114,30 +116,33 @@ export default function LiveMode() {
         )}
       </div>
 
-      {/* ── Right sidebar: Feed grid + Active alerts (unchanged) ───────────── */}
+      {/* ── Right sidebar: Live workers + Camera feeds + Alerts ───────────── */}
       <div>
+        {liveWorkerStreams.size > 0 && (
+          <>
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8, paddingLeft: 4 }}>
+              Live now ({liveWorkerStreams.size})
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+              {Array.from(liveWorkerStreams.entries()).map(([identity, stream]) => (
+                <LiveWorkerFeedCard
+                  key={identity}
+                  identity={identity}
+                  participant={stream.participant}
+                  videoTrack={stream.videoTrack}
+                  selected={selectedWorkerIdentity === identity}
+                  onClick={() => setSelectedWorkerIdentity(identity)}
+                />
+              ))}
+            </div>
+          </>
+        )}
         <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12, paddingLeft: 4 }}>
           Camera Feeds ({feeds.length})
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {feeds.map(f => (
             <LiveFeedCard key={f.id} feed={f} selected={selectedFeed === f.id} onClick={() => setSelectedFeed(f.id)} />
-          ))}
-        </div>
-
-        <div style={{ marginTop: 20 }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 10, paddingLeft: 4 }}>
-            Active Alerts
-          </div>
-          {alerts.map(a => (
-            <div key={a.id} style={{
-              padding: '10px 12px', borderRadius: 8, marginBottom: 6,
-              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
-              <div style={{ fontSize: 12, color: '#FCA5A5', lineHeight: 1.3 }}>{a.title}</div>
-            </div>
           ))}
         </div>
       </div>

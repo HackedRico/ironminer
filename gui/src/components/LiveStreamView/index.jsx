@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { ConnectionState } from 'livekit-client'
 import { C } from '../../utils/colors'
 import useLiveStream from '../../hooks/useLiveStream'
 import useAudioControls from '../../hooks/useAudioControls'
@@ -11,10 +12,16 @@ import WorkerSelector from './WorkerSelector'
  * LiveStreamView — real-time video + push-to-talk container.
  * Slots into the left column of LiveMode.jsx when LiveKit is available.
  *
- * @param {{ site: {id, name}|null, selectedFeed: FeedConfig|null }} props
+ * @param {{ site, selectedFeed, onWorkerStreamsChange, selectedWorkerIdentity, onSelectWorker }} props
  */
-export default function LiveStreamView({ site, selectedFeed }) {
-  const [selectedWorkerIdentity, setSelectedWorkerIdentity] = useState(null)
+export default function LiveStreamView({
+  site,
+  selectedFeed,
+  onWorkerStreamsChange,
+  selectedWorkerIdentity: controlledSelectedWorker,
+  onSelectWorker,
+}) {
+  const [internalSelectedWorker, setInternalSelectedWorker] = useState(null)
 
   const roomName = site ? `site-${site.id}` : null
   const { connect, disconnect, workerStreams, isConnected, connectionState, room, error } =
@@ -23,9 +30,22 @@ export default function LiveStreamView({ site, selectedFeed }) {
   const { isMicEnabled, isPTTActive, startTalking, stopTalking, toggleMic } =
     useAudioControls(room)
 
+  const isControlled = typeof onSelectWorker === 'function'
+  const selectedWorkerIdentity = isControlled ? controlledSelectedWorker : internalSelectedWorker
+
   const handleSelectWorker = useCallback((identity) => {
-    setSelectedWorkerIdentity(identity)
-  }, [])
+    if (isControlled) onSelectWorker(identity)
+    else setInternalSelectedWorker(identity)
+  }, [isControlled, onSelectWorker])
+
+  useEffect(() => {
+    if (typeof onWorkerStreamsChange === 'function') onWorkerStreamsChange(workerStreams)
+  }, [workerStreams, onWorkerStreamsChange])
+
+  // Auto-connect when we have a site so sidebar shows live thumbnails before user clicks Connect
+  useEffect(() => {
+    if (roomName && connectionState === ConnectionState.Disconnected) connect()
+  }, [roomName, connectionState])
 
   const selectedStream = selectedWorkerIdentity ? workerStreams.get(selectedWorkerIdentity) : null
   const pttTarget = selectedStream?.participant?.name || 'Site Broadcast'

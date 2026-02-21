@@ -30,6 +30,7 @@ export default function WorkerSimulator() {
   const [status, setStatus] = useState('') // '' | 'connecting' | 'connected' | 'error'
   const [error, setError] = useState(null)
   const videoRef = useRef(null)
+  const managerAudioRef = useRef(null)
   const roomRef = useRef(null)
   const localVideoTrackRef = useRef(null)
 
@@ -93,6 +94,35 @@ export default function WorkerSimulator() {
     if (!track || !el || status !== 'connected') return
     track.attach(el)
     return () => { track.detach(el) }
+  }, [status])
+
+  // Subscribe to manager (or any remote) audio so worker can hear push-to-talk
+  useEffect(() => {
+    const room = roomRef.current
+    const el = managerAudioRef.current
+    if (!room || !el || status !== 'connected') return
+
+    const attachRemoteAudio = (track) => {
+      if (track.kind === Track.Kind.Audio && el) {
+        track.attach(el)
+        el.play().catch(() => {})
+      }
+    }
+
+    const onTrackSubscribed = (track, publication, participant) => {
+      if (participant.identity === room.localParticipant.identity) return
+      attachRemoteAudio(track)
+    }
+
+    // Attach any existing remote audio
+    room.remoteParticipants.forEach((p) => {
+      p.trackPublications.forEach((pub) => {
+        if (pub.track && pub.kind === 'audio') attachRemoteAudio(pub.track)
+      })
+    })
+
+    room.on(RoomEvent.TrackSubscribed, onTrackSubscribed)
+    return () => room.off(RoomEvent.TrackSubscribed, onTrackSubscribed)
   }, [status])
 
   // Cleanup on unmount
@@ -234,7 +264,7 @@ export default function WorkerSimulator() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              marginBottom: 16,
+              marginBottom: 8,
               padding: '10px 14px',
               borderRadius: 8,
               background: 'rgba(34,197,94,0.1)',
@@ -243,6 +273,25 @@ export default function WorkerSimulator() {
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E' }} />
               <span style={{ fontSize: 13, color: '#86EFAC' }}>Connected as worker</span>
             </div>
+            {/* Manager audio — worker hears manager PTT */}
+            <audio ref={managerAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+            <button
+              type="button"
+              onClick={() => managerAudioRef.current?.play().catch(() => {})}
+              style={{
+                width: '100%',
+                marginBottom: 16,
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.05)',
+                color: '#94A3B8',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              🔊 Tap to hear manager
+            </button>
             <button
               onClick={disconnect}
               style={{
