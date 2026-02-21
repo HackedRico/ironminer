@@ -287,8 +287,15 @@ async def save_safety_report(site_id: str, report: SafetyReport) -> None:
         return
 
     def _query():
+        generated_at = getattr(report, "generated_at", None)
+        if generated_at is None:
+            generated_at = datetime.now(timezone.utc)
         sb.table("safety_reports").upsert(
-            {"site_id": site_id, "data": report.model_dump(mode="json")},
+            {
+                "site_id": site_id,
+                "generated_at": generated_at,
+                "data": report.model_dump(mode="json"),
+            },
             on_conflict="site_id",
         ).execute()
 
