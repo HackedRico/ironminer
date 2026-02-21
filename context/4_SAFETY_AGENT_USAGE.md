@@ -227,6 +227,42 @@ gui/src/views/ReviewMode.jsx         — MODIFIED: added safety tab (import + ar
 
 ## How to Test
 
+### 0. Prerequisites (Start Backend First!)
+
+**The backend must be running before the frontend can make API calls.**
+
+```bash
+# Terminal 1: Start backend on port 8000
+cd /Users/rickychen/Documents/GitHub/ironminer
+source .venv/bin/activate
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+# Wait for: "Application startup complete."
+# Verify: curl http://localhost:8000/api/sites
+```
+
+**Common Issues:**
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `ECONNREFUSED` during startup | Frontend starts before backend ready (race condition) | Wait 2-3 seconds, page will auto-recover |
+| `ECONNREFUSED` persistent | Backend not running | Start uvicorn in Terminal 1 |
+| `ModuleNotFoundError` | Missing dependencies | Run `pip install -r requirements.txt` |
+| `Connection failed` | Wrong port in Vite config | Check `gui/vite.config.js` proxy target |
+
+**Note on startup errors:** If you see `ECONNREFUSED` errors in the first 2-3 seconds after starting both servers, **this is normal**. Vite starts in ~200ms while FastAPI takes ~3-5 seconds to initialize. The frontend will automatically retry and all requests will succeed once the backend is ready. You'll see this pattern:
+
+```
+4:39:48 PM [vite] http proxy error: /api/sites  ← Frontend starts, backend not ready
+...
+INFO: Application startup complete.              ← Backend ready
+INFO: 127.0.0.1:59530 - "GET /api/sites" 200    ← Requests now succeed
+```
+
+To avoid seeing these errors, either:
+1. **Start backend first, wait for "Application startup complete", then start frontend**
+2. **Use the combined startup script and ignore the initial ECONNREFUSED errors** (they resolve automatically)
+
 ### 1. Seed Supabase
 
 ```bash
@@ -241,6 +277,7 @@ gui/src/views/ReviewMode.jsx         — MODIFIED: added safety tab (import + ar
 ### 2. Safety Tab (frontend only)
 
 ```bash
+# Terminal 2: start frontend (backend must be running first!)
 cd gui && npm run dev
 # Open http://localhost:5173
 # Select a site → click "Safety" tab
@@ -250,9 +287,12 @@ cd gui && npm run dev
 ### 3. End-to-End
 
 ```bash
-# Terminal 1: start backend
+# Terminal 1: start backend FIRST
+cd /Users/rickychen/Documents/GitHub/ironminer
 source .venv/bin/activate
 uvicorn app.main:app --reload
+
+# Wait for startup complete message
 
 # Terminal 2: start frontend
 cd gui && npm run dev
