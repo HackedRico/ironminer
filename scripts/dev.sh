@@ -9,7 +9,11 @@ echo ""
 
 # Start backend
 echo "[Backend] Starting FastAPI on :8000"
-uvicorn app.main:app --reload --port 8000 &
+UVICORN_CMD=".venv/bin/uvicorn"
+if [ ! -x "$UVICORN_CMD" ]; then
+    UVICORN_CMD="uvicorn"
+fi
+"$UVICORN_CMD" app.main:app --reload --port 8000 &
 BACKEND_PID=$!
 
 # Start frontend

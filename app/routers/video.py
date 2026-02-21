@@ -9,6 +9,9 @@ from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPExce
 from typing import Optional
 
 from app.models.video import VideoJob, VideoProcessingResult
+from app.services.storage import VIDEO_JOBS
+from app.services import db
+from app.services.job_queue import create_job, get_job
 from app.services.storage import VIDEO_JOBS, VIDEO_RESULTS
 from app.services.job_queue import create_job, get_job, update_job
 from app.agents.video_agent import VideoAgent
@@ -91,7 +94,7 @@ async def get_job_status(job_id: str):
 
 @router.get("/jobs/{job_id}/result", response_model=VideoProcessingResult)
 async def get_job_result(job_id: str):
-    result = VIDEO_RESULTS.get(job_id)
+    result = await db.get_video_result(job_id)
     if not result:
         raise HTTPException(404, "Result not found — job may still be processing")
     return result
@@ -106,7 +109,7 @@ async def analyze_frame(body: dict):
 @router.post("/jobs/{job_id}/complete", response_model=VideoProcessingResult)
 async def complete_job(job_id: str, body: VideoProcessingResult):
     """Internal callback — Video Agent posts result when done."""
-    VIDEO_RESULTS[job_id] = body
+    await db.save_video_result(job_id, body.site_id, body)
     job = get_job(job_id)
     if job:
         job.status = "completed"
