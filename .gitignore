@@ -6,3 +6,4 @@ dist/
 .env
 uploads/
 **/*.mp4
+**/.gradle
