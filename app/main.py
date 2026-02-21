@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import sites, video, safety, productivity, alerts, streaming
+from app.routers import sites, video, safety, productivity, alerts, streaming, workers
 
 app = FastAPI(title="IronSite Manager API", version="0.1.0")
 
@@ -25,6 +25,7 @@ app.include_router(safety.router, prefix="/api/safety", tags=["Safety Agent"])
 app.include_router(productivity.router, prefix="/api/productivity", tags=["Productivity Agent"])
 app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
 app.include_router(streaming.router, prefix="/api/streaming", tags=["Live Streaming"])
+app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])
 
 
 @app.get("/")
