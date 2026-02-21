@@ -7,12 +7,20 @@ from app.models.video import VideoJob
 from app.services.storage import VIDEO_JOBS
 
 
-def create_job(site_id: str) -> VideoJob:
+def create_job(
+    site_id: str,
+    filename: str | None = None,
+    uploaded_by: str | None = None,
+    file_path: str | None = None,
+) -> VideoJob:
     job_id = f"vj_{uuid.uuid4().hex[:8]}"
     job = VideoJob(
         job_id=job_id,
         status="queued",
         site_id=site_id,
+        filename=filename,
+        uploaded_by=uploaded_by,
+        file_path=file_path,
         created_at=datetime.now(timezone.utc),
     )
     VIDEO_JOBS[job_id] = job

@@ -3,11 +3,11 @@ import SiteCard from '../components/SiteCard'
 import ZoneRow from '../components/ZoneRow'
 import AlertCard from '../components/AlertCard'
 import BriefingView from '../components/BriefingView'
-import UploadZone from '../components/UploadZone'
-import { fetchSites, fetchBriefing } from '../api/sites'
+import MediaGallery from '../components/MediaGallery'
+import AddProjectModal from '../components/AddProjectModal'
+import { fetchSites, fetchBriefing, createSite } from '../api/sites'
 import { fetchAlerts } from '../api/alerts'
 import { fetchZones } from '../api/productivity'
-import { uploadVideo } from '../api/video'
 import { MOCK_SITES, MOCK_ALERTS, MOCK_BRIEFINGS, MOCK_ZONES } from '../utils/mockData'
 
 export default function ReviewMode() {
@@ -18,7 +18,9 @@ export default function ReviewMode() {
   const [zones, setZones] = useState([])
   const [alerts, setAlerts] = useState([])
   const [expandedAlert, setExpandedAlert] = useState(null)
+  const [expandedZone, setExpandedZone] = useState(null)
   const [usingMock, setUsingMock] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
 
   // ── Load sites (API → mock fallback) ──────────────────────────────────────
   useEffect(() => {
@@ -57,17 +59,16 @@ export default function ReviewMode() {
 
   const site = sites.find(s => s.id === selectedSite)
 
-  const handleUpload = async (files) => {
-    for (const file of files) {
-      try {
-        await uploadVideo(file, selectedSite)
-      } catch (e) {
-        console.error('Upload failed:', e)
-      }
-    }
+  const handleModalSuccess = (newSite) => {
+    fetchSites()
+      .then(data => { setSites(data); setSelectedSite(newSite.id) })
+      .catch(() => { setSites(prev => [...prev, newSite]); setSelectedSite(newSite.id) })
+    setModalOpen(false)
+    setTab('briefing')
   }
 
   return (
+    <>
     <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 24 }}>
       {/* ── Left sidebar: Site list + Upload ─────────────────────────────── */}
       <div>
@@ -81,7 +82,19 @@ export default function ReviewMode() {
           </div>
         ))}
         <div style={{ marginTop: 16 }}>
-          <UploadZone onFiles={handleUpload} />
+          <button
+            onClick={() => setModalOpen(true)}
+            style={{
+              width: '100%', padding: '14px 20px', borderRadius: 12,
+              border: '1.5px dashed rgba(249,115,22,0.35)',
+              background: 'rgba(249,115,22,0.04)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: 8, color: '#FB923C', fontSize: 14, fontWeight: 600,
+              transition: 'all 0.2s',
+            }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Project
+          </button>
         </div>
       </div>
 
@@ -96,7 +109,7 @@ export default function ReviewMode() {
                 <p style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{site.address}</p>
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
-                {['briefing', 'zones', 'alerts'].map(t => (
+                {['briefing', 'zones', 'alerts', 'media'].map(t => (
                   <button key={t} onClick={() => setTab(t)} style={{
                     padding: '8px 18px', borderRadius: 8, border: '1px solid',
                     borderColor: tab === t ? 'rgba(249,115,22,0.3)' : 'rgba(255,255,255,0.06)',
@@ -122,18 +135,21 @@ export default function ReviewMode() {
                     AI-generated from {site.frames} frames
                   </span>
                 </div>
-                <BriefingView text={briefing} />
+                <BriefingView text={briefing} siteId={selectedSite} usingMock={usingMock} />
               </div>
             )}
 
             {/* ── TAB: Zones ─────────────────────────────────────────────── */}
             {tab === 'zones' && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Zone Congestion Map</span>
                 </div>
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
+                  Real-time worker density by zone. Bars show congestion level — red zones have overlapping trades that may cause delays or safety conflicts.
+                </div>
                 {zones.length > 0
-                  ? zones.map((z, i) => <ZoneRow key={i} zone={z} />)
+                  ? zones.map((z, i) => <ZoneRow key={i} zone={z} expanded={expandedZone === i} onToggle={() => setExpandedZone(expandedZone === i ? null : i)} />)
                   : <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>No zone data available for this site yet.</div>
                 }
               </div>
@@ -142,8 +158,11 @@ export default function ReviewMode() {
             {/* ── TAB: Alerts ────────────────────────────────────────────── */}
             {tab === 'alerts' && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Spatial Alerts</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
+                  AI-detected safety and scheduling issues from uploaded footage. Expand an alert to see details and recommended actions.
                 </div>
                 {alerts.length === 0
                   ? <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>No alerts for this site. Everything looks good.</div>
@@ -153,9 +172,31 @@ export default function ReviewMode() {
                 }
               </div>
             )}
+
+            {/* ── TAB: Media ─────────────────────────────────────────────── */}
+            {tab === 'media' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Uploaded Media
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
+                  All video footage uploaded for this site. Click play to review clips, or upload new footage from the Briefing tab.
+                </div>
+                <MediaGallery siteId={selectedSite} usingMock={usingMock} />
+              </div>
+            )}
           </>
         )}
       </div>
     </div>
+
+    <AddProjectModal
+      isOpen={modalOpen}
+      onClose={() => setModalOpen(false)}
+      onSuccess={handleModalSuccess}
+    />
+    </>
   )
 }
