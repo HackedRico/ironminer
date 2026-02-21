@@ -290,10 +290,12 @@ async def save_safety_report(site_id: str, report: SafetyReport) -> None:
         generated_at = getattr(report, "generated_at", None)
         if generated_at is None:
             generated_at = datetime.now(timezone.utc)
+        # Convert datetime → ISO string so httpx/json can serialize it
+        generated_at_str = generated_at.isoformat() if hasattr(generated_at, "isoformat") else str(generated_at)
         sb.table("safety_reports").upsert(
             {
                 "site_id": site_id,
-                "generated_at": generated_at,
+                "generated_at": generated_at_str,
                 "data": report.model_dump(mode="json"),
             },
             on_conflict="site_id",
