@@ -141,8 +141,11 @@ export default function ReviewMode() {
             {/* ── TAB: Zones ─────────────────────────────────────────────── */}
             {tab === 'zones' && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Zone Congestion Map</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, marginBottom: 14, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 8 }}>
+                  Real-time worker density by zone. Bars show congestion level — red zones have overlapping trades that may cause delays or safety conflicts.
                 </div>
                 {zones.length > 0
                   ? zones.map((z, i) => <ZoneRow key={i} zone={z} />)
@@ -154,8 +157,11 @@ export default function ReviewMode() {
             {/* ── TAB: Alerts ────────────────────────────────────────────── */}
             {tab === 'alerts' && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Spatial Alerts</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, marginBottom: 14, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 8 }}>
+                  AI-detected safety and scheduling issues from uploaded footage. Expand an alert to see details and recommended actions.
                 </div>
                 {alerts.length === 0
                   ? <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>No alerts for this site. Everything looks good.</div>
@@ -169,10 +175,13 @@ export default function ReviewMode() {
             {/* ── TAB: Media ─────────────────────────────────────────────── */}
             {tab === 'media' && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     Uploaded Media
                   </span>
+                </div>
+                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, marginBottom: 14, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 8 }}>
+                  All video footage uploaded for this site. Click play to review clips, or upload new footage from the Briefing tab.
                 </div>
                 <MediaGallery siteId={selectedSite} usingMock={usingMock} />
               </div>
