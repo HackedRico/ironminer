@@ -11,6 +11,7 @@ from app.models.streaming import (
     TokenResponse,
 )
 
+from app.services import db
 from app.services.storage import FEEDS
 
 from app.services.livekit_service import (
