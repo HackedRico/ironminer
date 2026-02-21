@@ -2,14 +2,18 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from datetime import datetime, timezone
 from typing import Optional
 
-from app.services.supabase_client import get_supabase
+from app.services.supabase_client import get_supabase, reset_supabase
 from app.models.site import Site
 from app.models.alert import Alert
 from app.models.streaming import FeedConfig
 from app.models.video import VideoProcessingResult, FrameData
 from app.models.analysis import SafetyReport
+
+logger = logging.getLogger(__name__)
 
 # Lazy import to avoid circular — storage module is only needed for fallback
 _storage = None
@@ -21,6 +25,31 @@ def _get_storage():
         from app.services import storage as _s
         _storage = _s
     return _storage
+
+
+async def _db_query(fn):
+    """Run a sync Supabase query in a thread, retrying once on stale-connection errors.
+
+    On macOS, httpx connection pools return EAGAIN (errno 35) on HTTP/2 connections
+    that have gone idle. We catch ReadError, reset the Supabase singleton (forcing a
+    fresh TCP connection), and retry once automatically.
+    """
+    try:
+        return await asyncio.to_thread(fn)
+    except Exception as exc:
+        # Detect httpx.ReadError / httpcore.ReadError without a hard import
+        exc_type_name = type(exc).__name__
+        if exc_type_name == "ReadError" or any(
+            c.__name__ == "ReadError" for c in type(exc).__mro__
+        ):
+            logger.warning(
+                "Supabase ReadError (stale HTTP/2 connection) — resetting client and retrying: %s", exc
+            )
+            reset_supabase()
+            return await asyncio.to_thread(fn)
+        raise
+
+
 
 
 # ── Sites ──────────────────────────────────────────────────────────────────────
@@ -39,7 +68,7 @@ async def get_sites(status: Optional[str] = None) -> list[Site]:
             q = q.eq("status", status)
         return q.execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     return [Site(**r) for r in rows]
 
 
@@ -51,7 +80,7 @@ async def get_site(site_id: str) -> Optional[Site]:
     def _query():
         return sb.table("sites").select("*").eq("id", site_id).execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     return Site(**rows[0]) if rows else None
 
 
@@ -65,7 +94,7 @@ async def create_site(site: Site) -> Site:
         row = site.model_dump(mode="json")
         sb.table("sites").upsert(row, on_conflict="id").execute()
 
-    await asyncio.to_thread(_query)
+    await _db_query(_query)
     return site
 
 
@@ -79,7 +108,7 @@ async def get_briefing(site_id: str) -> Optional[str]:
     def _query():
         return sb.table("briefings").select("text").eq("site_id", site_id).execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     return rows[0]["text"] if rows else None
 
 
@@ -121,7 +150,7 @@ async def get_alerts(
         q = q.order("created_at", desc=True).limit(limit)
         return q.execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     return [Alert(**r) for r in rows]
 
 
@@ -133,7 +162,7 @@ async def get_alert(alert_id: str) -> Optional[Alert]:
     def _query():
         return sb.table("alerts").select("*").eq("id", alert_id).execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     return Alert(**rows[0]) if rows else None
 
 
@@ -147,7 +176,7 @@ async def create_alert(alert: Alert) -> Alert:
         row = alert.model_dump(mode="json")
         sb.table("alerts").upsert(row, on_conflict="id").execute()
 
-    await asyncio.to_thread(_query)
+    await _db_query(_query)
     return alert
 
 
@@ -165,7 +194,7 @@ async def update_alert(alert_id: str, data: dict) -> Optional[Alert]:
     def _query():
         return sb.table("alerts").update(data).eq("id", alert_id).execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     return Alert(**rows[0]) if rows else None
 
 
@@ -185,7 +214,7 @@ async def get_feeds(site_id: Optional[str] = None) -> list[FeedConfig]:
             q = q.eq("site_id", site_id)
         return q.execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     return [FeedConfig(**r) for r in rows]
 
 
@@ -197,7 +226,7 @@ async def get_feed(feed_id: str) -> Optional[FeedConfig]:
     def _query():
         return sb.table("feeds").select("*").eq("id", feed_id).execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     return FeedConfig(**rows[0]) if rows else None
 
 
@@ -211,7 +240,7 @@ async def create_feed(feed: FeedConfig) -> FeedConfig:
         row = feed.model_dump(mode="json")
         sb.table("feeds").upsert(row, on_conflict="id").execute()
 
-    await asyncio.to_thread(_query)
+    await _db_query(_query)
     return feed
 
 
@@ -229,7 +258,7 @@ async def update_feed(feed_id: str, data: dict) -> Optional[FeedConfig]:
     def _query():
         return sb.table("feeds").update(data).eq("id", feed_id).execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     return FeedConfig(**rows[0]) if rows else None
 
 
@@ -243,7 +272,7 @@ async def get_video_result(job_id: str) -> Optional[VideoProcessingResult]:
     def _query():
         return sb.table("video_results").select("*").eq("job_id", job_id).execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     if not rows:
         return None
     return VideoProcessingResult(**rows[0]["data"])
@@ -261,7 +290,7 @@ async def save_video_result(job_id: str, site_id: str, result: VideoProcessingRe
             on_conflict="job_id",
         ).execute()
 
-    await asyncio.to_thread(_query)
+    await _db_query(_query)
 
 
 # ── Safety Reports ─────────────────────────────────────────────────────────────
@@ -274,7 +303,7 @@ async def get_safety_report(site_id: str) -> Optional[SafetyReport]:
     def _query():
         return sb.table("safety_reports").select("*").eq("site_id", site_id).execute().data
 
-    rows = await asyncio.to_thread(_query)
+    rows = await _db_query(_query)
     if not rows:
         return None
     return SafetyReport(**rows[0]["data"])
@@ -301,4 +330,4 @@ async def save_safety_report(site_id: str, report: SafetyReport) -> None:
             on_conflict="site_id",
         ).execute()
 
-    await asyncio.to_thread(_query)
+    await _db_query(_query)

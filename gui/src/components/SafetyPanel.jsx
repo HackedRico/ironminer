@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import { runSafetyAnalysis, fetchSafetyReport } from '../api/safety'
-import { severityStyle, C } from '../utils/colors'
+import { severityStyle } from '../utils/colors'
 
 const riskColor = {
   critical: { bg: 'rgba(239,68,68,0.18)', border: '#EF4444', text: '#FCA5A5' },
-  high:     { bg: 'rgba(239,68,68,0.14)', border: '#EF4444', text: '#FCA5A5' },
-  medium:   { bg: 'rgba(245,158,11,0.14)', border: '#F59E0B', text: '#FCD34D' },
-  low:      { bg: 'rgba(34,197,94,0.14)', border: '#22C55E', text: '#86EFAC' },
+  high: { bg: 'rgba(239,68,68,0.14)', border: '#EF4444', text: '#FCA5A5' },
+  medium: { bg: 'rgba(245,158,11,0.14)', border: '#F59E0B', text: '#FCD34D' },
+  low: { bg: 'rgba(34,197,94,0.14)', border: '#22C55E', text: '#86EFAC' },
 }
 
-// Mock safety report for demo mode (mirrors deterministic Phase 1 output)
+// Last-resort embedded mock — only shown if backend AND Supabase are both unreachable
 const MOCK_SAFETY_REPORT = {
   s1: {
     site_id: 's1',
@@ -51,31 +51,86 @@ const MOCK_SAFETY_REPORT = {
   },
 }
 
+/**
+ * Defensively parse the summary field — the LLM sometimes returns
+ * the raw JSON string {"summary": "..."} instead of just the text.
+ * Also splits into paragraphs on double-newlines or numbered markers.
+ */
+function parseSummary(raw) {
+  if (!raw) return []
+  let text = raw.trim()
+  // Strip JSON wrapper if present
+  if (text.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(text)
+      text = parsed.summary ?? parsed.text ?? Object.values(parsed)[0] ?? text
+    } catch {
+      // Not valid JSON — strip leading/trailing braces and quotes as best effort
+      text = text.replace(/^\{\s*"summary"\s*:\s*"/, '').replace(/"\s*\}$/, '')
+    }
+  }
+  // Split on double newlines, or on the numbered paragraph pattern ("1. ", "2. ", "3. ")
+  const parts = text
+    .split(/\n{2,}|(?=\b[1-3]\.\s)/)
+    .map(p => p.trim())
+    .filter(Boolean)
+  return parts.length > 1 ? parts : [text]
+}
+
+// Source badge config
+const SOURCE_CONFIG = {
+  backend: { label: '● LIVE — fetched via backend API', color: '#4ADE80' },
+  supabase: { label: '● LIVE — fetched directly from Supabase', color: '#60A5FA' },
+  mock: { label: '⚠ OFFLINE — backend and Supabase unavailable, showing embedded mock', color: '#F59E0B' },
+}
+
 export default function SafetyPanel({ siteId }) {
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [usingMock, setUsingMock] = useState(false)
+  const [supabaseError, setSupabaseError] = useState(null)
   const [dismissed, setDismissed] = useState({}) // index -> true
   const [expanded, setExpanded] = useState(null)
+  // 'backend' | 'supabase' | 'mock' | null
+  const [dataSource, setDataSource] = useState(null)
 
   const handleRun = async () => {
     setLoading(true)
     setError(null)
+    setSupabaseError(null)
     setDismissed({})
-    setUsingMock(false)
+    setDataSource(null)
     try {
+      // ── Path 1: backend is running ──────────────────────────────────────
       await runSafetyAnalysis(siteId, 'mock_vj_001')
       const data = await fetchSafetyReport(siteId)
       setReport(data)
-    } catch (e) {
-      // Backend unavailable — fall back to mock report
+      setDataSource('backend')
+    } catch (backendErr) {
+      // ── Path 2: backend down — try Supabase directly ────────────────────
+      let sbErrorMsg = null
+      try {
+        const { fetchSafetyReportFromSupabase } = await import('../lib/supabase')
+        const { data: sbData, error: sbErr } = await fetchSafetyReportFromSupabase(siteId)
+        if (sbData) {
+          setReport(sbData)
+          setDataSource('supabase')
+          return
+        }
+        sbErrorMsg = sbErr || 'No data returned from Supabase'
+        console.warn('[SafetyPanel] Supabase fallback failed:', sbErrorMsg)
+      } catch (sbErr) {
+        sbErrorMsg = sbErr?.message || String(sbErr)
+        console.warn('[SafetyPanel] Supabase fallback threw:', sbErrorMsg)
+      }
+      // ── Path 3: truly offline — use embedded mock ───────────────────────
       const mock = MOCK_SAFETY_REPORT[siteId]
       if (mock) {
         setReport(mock)
-        setUsingMock(true)
+        setDataSource('mock')
+        setSupabaseError(sbErrorMsg)
       } else {
-        setError(e.message || 'Analysis failed')
+        setError('Backend and Supabase both unavailable, and no mock data for this site.')
       }
     } finally {
       setLoading(false)
@@ -122,14 +177,23 @@ export default function SafetyPanel({ siteId }) {
   }
 
   const rc = riskColor[report.overall_risk] || riskColor.low
+  const src = dataSource ? SOURCE_CONFIG[dataSource] : null
 
   return (
     <div>
       {runButton}
 
-      {usingMock && (
-        <div style={{ fontSize: 11, color: '#F59E0B', marginBottom: 12, fontFamily: 'var(--mono)', letterSpacing: '0.05em' }}>
-          DEMO DATA — backend unavailable, showing mock safety report
+      {/* ── Data source indicator ─────────────────────────────────────────── */}
+      {src && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: src.color, fontFamily: 'var(--mono)', letterSpacing: '0.05em' }}>
+            {src.label}
+          </div>
+          {dataSource === 'mock' && supabaseError && (
+            <div style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'var(--mono)', marginTop: 3, paddingLeft: 2 }}>
+              Reason: {supabaseError}
+            </div>
+          )}
         </div>
       )}
 
@@ -147,12 +211,14 @@ export default function SafetyPanel({ siteId }) {
 
       {/* ── Executive Summary ─────────────────────────────────────────────── */}
       <div style={{
-        fontSize: 13, color: '#F1F5F9', lineHeight: 1.7, marginBottom: 24,
+        fontSize: 13, color: '#F1F5F9', lineHeight: 1.75, marginBottom: 24,
         padding: '14px 18px', background: 'rgba(249,115,22,0.04)',
         border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8,
         borderLeft: '3px solid rgba(249,115,22,0.4)',
       }}>
-        {report.summary}
+        {parseSummary(report.summary).map((para, i) => (
+          <p key={i} style={{ margin: i === 0 ? 0 : '10px 0 0 0' }}>{para}</p>
+        ))}
       </div>
 
       {/* ── Violations ────────────────────────────────────────────────────── */}

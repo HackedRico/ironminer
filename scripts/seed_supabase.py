@@ -64,7 +64,51 @@ def main() -> None:
             on_conflict="job_id",
         ).execute()
 
+    # ── Safety report (pre-computed from mock data) ───────────────────────────
+    _seed_safety_report(sb)
+
     print("Done! All seed data upserted.")
+
+
+def _seed_safety_report(sb) -> None:
+    """Compute and upsert the Safety Agent report for site s1."""
+    from datetime import datetime, timezone
+    from app.agents.safety_agent import (
+        run_deterministic_checks,
+        _compute_compliance,
+        _compute_overall_risk,
+    )
+    from app.models.analysis import SafetyReport
+    from app.data.mock_video_results import MOCK_VIDEO_RESULT
+
+    violations = run_deterministic_checks(MOCK_VIDEO_RESULT)
+    ppe, zone = _compute_compliance(MOCK_VIDEO_RESULT, violations)
+    risk = _compute_overall_risk(violations)
+    summary = (
+        f"[Pre-seeded] {len(violations)} safety violations detected across Riverside Tower. "
+        f"Overall risk: {risk}. Top concerns: Zone B scaffold congestion (3 trades, 400 sqft), "
+        f"Zone C crane violations (workers under suspended load, missing hard hats in swing radius), "
+        f"Zone E live electrical work without LOTO and hot work without fire watch. "
+        f"Run backend analysis to generate a full LLM-written executive summary."
+    )
+    report = SafetyReport(
+        site_id="s1",
+        violations=violations,
+        ppe_compliance=ppe,
+        zone_adherence=zone,
+        overall_risk=risk,
+        summary=summary,
+        generated_at=datetime.now(timezone.utc),
+    )
+    print(f"Upserting safety report for s1 ({len(violations)} violations, risk={risk})...")
+    sb.table("safety_reports").upsert(
+        {
+            "site_id": "s1",
+            "generated_at": report.generated_at.isoformat(),
+            "data": report.model_dump(mode="json"),
+        },
+        on_conflict="site_id",
+    ).execute()
 
 
 if __name__ == "__main__":
