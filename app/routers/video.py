@@ -1,4 +1,8 @@
 from __future__ import annotations
+import re
+import uuid as _uuid
+from pathlib import Path
+
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from typing import Optional
 
@@ -10,15 +14,31 @@ from app.agents.video_agent import VideoAgent
 router = APIRouter()
 agent = VideoAgent()
 
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+
+def _sanitize(name: str) -> str:
+    return re.sub(r"[^\w.\-]", "_", name)
+
 
 @router.post("/upload", response_model=VideoJob)
 async def upload_video(
     file: UploadFile = File(...),
     site_id: Optional[str] = Form(None),
+    uploaded_by: Optional[str] = Form(None),
     frame_interval: float = Form(5.0),
 ):
     sid = site_id or file.filename or "unknown"
-    job = create_job(sid)
+    original_name = file.filename or "video"
+    disk_name = f"{_uuid.uuid4().hex[:8]}_{_sanitize(original_name)}"
+    dest = UPLOAD_DIR / disk_name
+
+    data = await file.read()
+    dest.write_bytes(data)
+
+    rel_path = f"uploads/{disk_name}"
+    job = create_job(sid, filename=original_name, uploaded_by=uploaded_by, file_path=rel_path)
     # TODO: kick off agent.process() in background task
     return job
 

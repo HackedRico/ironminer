@@ -3,6 +3,7 @@ import SiteCard from '../components/SiteCard'
 import ZoneRow from '../components/ZoneRow'
 import AlertCard from '../components/AlertCard'
 import BriefingView from '../components/BriefingView'
+import MediaGallery from '../components/MediaGallery'
 import AddProjectModal from '../components/AddProjectModal'
 import { fetchSites, fetchBriefing, createSite } from '../api/sites'
 import { fetchAlerts } from '../api/alerts'
@@ -107,7 +108,7 @@ export default function ReviewMode() {
                 <p style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{site.address}</p>
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
-                {['briefing', 'zones', 'alerts'].map(t => (
+                {['briefing', 'zones', 'alerts', 'media'].map(t => (
                   <button key={t} onClick={() => setTab(t)} style={{
                     padding: '8px 18px', borderRadius: 8, border: '1px solid',
                     borderColor: tab === t ? 'rgba(249,115,22,0.3)' : 'rgba(255,255,255,0.06)',
@@ -162,6 +163,18 @@ export default function ReviewMode() {
                     <AlertCard key={a.id} alert={a} expanded={expandedAlert === a.id} onToggle={() => setExpandedAlert(expandedAlert === a.id ? null : a.id)} />
                   ))
                 }
+              </div>
+            )}
+
+            {/* ── TAB: Media ─────────────────────────────────────────────── */}
+            {tab === 'media' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Uploaded Media
+                  </span>
+                </div>
+                <MediaGallery siteId={selectedSite} usingMock={usingMock} />
               </div>
             )}
           </>

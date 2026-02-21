@@ -100,7 +100,7 @@ export default function BriefingView({ text, siteId, usingMock }) {
   const handleUpload = async (files) => {
     for (const file of files) {
       try {
-        await uploadVideo(file, siteId)
+        await uploadVideo(file, siteId, noteWho.trim() || 'Site Manager')
         pushLocal({
           id: `upload_${Date.now()}_${file.name}`,
           who: noteWho.trim() || 'Site Manager',

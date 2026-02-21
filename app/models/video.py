@@ -16,6 +16,9 @@ class VideoJob(BaseModel):
     job_id: str
     status: str  # queued | processing | completed | failed
     site_id: str
+    filename: Optional[str] = None
+    uploaded_by: Optional[str] = None
+    file_path: Optional[str] = None
     total_frames: Optional[int] = None
     processed_frames: int = 0
     frames: list[FrameData] = []

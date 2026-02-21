@@ -1,9 +1,10 @@
 import { api } from './client'
 
-export const uploadVideo = async (file, siteId, frameInterval = 5.0) => {
+export const uploadVideo = async (file, siteId, uploadedBy, frameInterval = 5.0) => {
   const form = new FormData()
   form.append('file', file)
   if (siteId) form.append('site_id', siteId)
+  if (uploadedBy) form.append('uploaded_by', uploadedBy)
   form.append('frame_interval', frameInterval.toString())
   const res = await fetch('/api/video/upload', { method: 'POST', body: form })
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
