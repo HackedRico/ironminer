@@ -1,5 +1,4 @@
 export default function LiveFeedCard({ feed, selected, onClick }) {
-  const isHelmet = feed.type === 'helmet'
   return (
     <button onClick={onClick} style={{
       width: '100%', aspectRatio: '16/10', borderRadius: 10, overflow: 'hidden',
@@ -8,10 +7,7 @@ export default function LiveFeedCard({ feed, selected, onClick }) {
     }}>
       <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.015) 2px, rgba(255,255,255,0.015) 4px)', opacity: 0.8 }} />
       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 24, marginBottom: 4 }}>{isHelmet ? '\u26D1\uFE0F' : '\uD83D\uDCF9'}</div>
-          <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'var(--mono)' }}>FEED</div>
-        </div>
+        <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'var(--mono)' }}>FEED</div>
       </div>
       <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(0,0,0,0.7)', padding: '3px 8px', borderRadius: 4 }}>
         <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF4444', animation: 'pulse 2s infinite' }} />

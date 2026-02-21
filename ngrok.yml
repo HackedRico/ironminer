@@ -1,0 +1,14 @@
+version: "2"
+# Run both tunnels (use BOTH configs so your saved authtoken is used):
+#   PowerShell: ngrok start --all --config "$env:LOCALAPPDATA\ngrok\ngrok.yml",".\ngrok.yml"
+#   Bash:       ngrok start --all --config "$HOME/.config/ngrok/ngrok.yml","$PWD/ngrok.yml"
+# Or after: ngrok config add-authtoken YOUR_TOKEN  (saved to default config)
+tunnels:
+  frontend:
+    addr: 5173
+    proto: http
+    # Gets you: https://xxxx.ngrok-free.app  (share with phone for /worker page)
+  livekit:
+    addr: 7880
+    proto: http
+    # Gets you: wss://yyyy.ngrok-free.app  (set as LIVEKIT_PUBLIC_WS_URL in .env)

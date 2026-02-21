@@ -1,9 +1,28 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-from app.models.streaming import FeedConfig, FeedCreate, LiveScanResult, AutoScanRequest
+from app.models.streaming import (
+    FeedConfig,
+    FeedCreate,
+    LiveScanResult,
+    AutoScanRequest,
+    TokenRequest,
+    TokenResponse,
+)
+
 from app.services import db
+from app.services.storage import FEEDS
+
+from app.services.livekit_service import (
+    generate_manager_token,
+    generate_worker_token,
+    list_rooms,
+    list_participants,
+    livekit_ws_url_for_client,
+)
+
+
 from app.ws.manager import ws_manager
 
 router = APIRouter()
@@ -101,3 +120,61 @@ async def ws_comms(ws: WebSocket, feed_id: str):
             await ws_manager.broadcast(channel, msg)
     except WebSocketDisconnect:
         ws_manager.disconnect(channel, ws)
+
+
+# ── LiveKit endpoints ─────────────────────────────────────────────────────────
+
+@router.post("/livekit/token/manager", response_model=TokenResponse)
+async def get_manager_token(body: TokenRequest, request: Request):
+    """
+    Generate a manager JWT. Manager can publish microphone audio (push-to-talk)
+    and subscribe to all worker video + audio streams in the room.
+    The livekit_url in the response is automatically adjusted to the client's
+    network — phone on LAN gets ws://192.168.x.x:7880, localhost gets ws://localhost:7880.
+    """
+    token = generate_manager_token(
+        room_name=body.room_name,
+        identity=body.identity,
+        display_name=body.display_name or body.identity,
+    )
+    return TokenResponse(
+        token=token,
+        room_name=body.room_name,
+        livekit_url=livekit_ws_url_for_client(request.headers.get("origin", "")),
+    )
+
+
+@router.post("/livekit/token/worker", response_model=TokenResponse)
+async def get_worker_token(body: TokenRequest, request: Request):
+    """
+    Generate a worker JWT. Worker publishes camera video + microphone audio
+    and subscribes to manager audio instructions.
+    """
+    token = generate_worker_token(
+        room_name=body.room_name,
+        identity=body.identity,
+        display_name=body.display_name or body.identity,
+    )
+    return TokenResponse(
+        token=token,
+        room_name=body.room_name,
+        livekit_url=livekit_ws_url_for_client(request.headers.get("origin", "")),
+    )
+
+
+@router.get("/livekit/rooms")
+async def get_livekit_rooms():
+    """List active LiveKit rooms. Returns 503 if LiveKit server is unreachable."""
+    try:
+        return await list_rooms()
+    except Exception as exc:
+        raise HTTPException(503, f"LiveKit unavailable: {exc}")
+
+
+@router.get("/livekit/rooms/{room_name}/participants")
+async def get_room_participants(room_name: str):
+    """List participants currently in a LiveKit room."""
+    try:
+        return await list_participants(room_name)
+    except Exception as exc:
+        raise HTTPException(503, f"LiveKit unavailable: {exc}")

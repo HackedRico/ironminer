@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:docs.livekit.io)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:hub.docker.com)",
+      "Bash(cd /c/Users/chukw/Desktop/Programming/ironminer/gui && node -e \"require\\('react-router-dom'\\); console.log\\('ok'\\)\" 2>&1)"
+    ]
+  }
+}

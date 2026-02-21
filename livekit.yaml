@@ -1,0 +1,15 @@
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false   # set true + node_ip for multi-device LAN testing
+
+# API key/secret — must match LIVEKIT_API_KEY and LIVEKIT_API_SECRET in .env
+keys:
+  devkey: devsecret
+
+redis:
+  address: redis:6379   # "localhost:6379" when running livekit-server on host
+
+logging:
+  level: info
