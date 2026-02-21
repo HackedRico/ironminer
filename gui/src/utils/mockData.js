@@ -183,6 +183,91 @@ export const MOCK_ZONES = {
 }
 
 
+// ── TIMELINE ENTRIES (by site) ───────────────────────────────────────────────
+// Each entry: who logged it, what video was uploaded, and the AI summary of that task.
+// source: 'upload' | 'manual' | 'agent'
+
+export const MOCK_TIMELINE = {
+  s1: [
+    {
+      id: "tl_s1_1",
+      who: "J. Martinez",
+      timestamp: "2025-02-21T14:32:00Z",
+      source: "upload",
+      video: "zone_b_level3_pm.mp4",
+      action: "Uploaded afternoon footage of Level 3 East scaffolding",
+      ai_summary: "Zone B congestion worsened since morning. Electrical and framing crews now overlap with plumbing. Three blocked walkways detected. Recommend staggering electrical to 3pm start.",
+    },
+    {
+      id: "tl_s1_2",
+      who: "R. Chen",
+      timestamp: "2025-02-21T11:15:00Z",
+      source: "upload",
+      video: "crane_zone_c_morning.mp4",
+      action: "Uploaded crane swing zone footage — Zone C north exterior",
+      ai_summary: "Two workers without hard hats detected within crane radius for 4+ minutes. Same northeast corner as yesterday's flag. No other PPE violations in frame.",
+    },
+    {
+      id: "tl_s1_3",
+      who: "Site Manager",
+      timestamp: "2025-02-21T09:00:00Z",
+      source: "manual",
+      video: null,
+      action: "Electrical crew moved to afternoon shift per yesterday's recommendation",
+      ai_summary: null,
+    },
+    {
+      id: "tl_s1_4",
+      who: "J. Martinez",
+      timestamp: "2025-02-20T16:45:00Z",
+      source: "upload",
+      video: "level1_formwork_eod.mp4",
+      action: "End-of-day scan of Level 1 east deck formwork removal",
+      ai_summary: "Shoring 60% removed, ahead of schedule by approximately 1.5 days. No workers in hazard zone during removal. Staging area clear.",
+    },
+  ],
+  s2: [
+    {
+      id: "tl_s2_1",
+      who: "T. Williams",
+      timestamp: "2025-02-21T12:50:00Z",
+      source: "upload",
+      video: "south_access_midday.mp4",
+      action: "Uploaded south access road footage after midday delivery",
+      ai_summary: "Lumber staging confirmed across main vehicle corridor. Access road 80% blocked. Equipment unable to reach west bay. Delivery truck still on site.",
+    },
+    {
+      id: "tl_s2_2",
+      who: "Site Manager",
+      timestamp: "2025-02-21T08:30:00Z",
+      source: "manual",
+      video: null,
+      action: "Morning walkthrough — east bay concrete pour started on schedule",
+      ai_summary: null,
+    },
+  ],
+  s3: [
+    {
+      id: "tl_s3_1",
+      who: "Site Manager",
+      timestamp: "2025-02-21T13:20:00Z",
+      source: "upload",
+      video: "lots_18_21_cladding.mp4",
+      action: "Uploaded facade progress footage — Lots 18–21",
+      ai_summary: "Exterior cladding installation 70% complete on lots 18–21. No congestion. Two workers confirmed on scaffolding with correct PPE. On track to finish by end of week.",
+    },
+    {
+      id: "tl_s3_2",
+      who: "Site Manager",
+      timestamp: "2025-02-20T15:00:00Z",
+      source: "upload",
+      video: "foundation_lots_22_28.mp4",
+      action: "Uploaded foundation inspection footage — Lots 22–28",
+      ai_summary: "Foundation pour complete and curing. Single concrete crew on site, no issues. Area clear of debris.",
+    },
+  ],
+}
+
 // ── HELPER: check if backend is reachable ────────────────────────────────────
 
 let _backendAvailable = null
