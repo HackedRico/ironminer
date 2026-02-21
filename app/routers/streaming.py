@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from app.models.streaming import FeedConfig, FeedCreate, LiveScanResult, AutoScanRequest, TokenRequest, TokenResponse
 from app.services.storage import FEEDS
@@ -117,10 +117,12 @@ async def ws_comms(ws: WebSocket, feed_id: str):
 # ── LiveKit endpoints ─────────────────────────────────────────────────────────
 
 @router.post("/livekit/token/manager", response_model=TokenResponse)
-async def get_manager_token(body: TokenRequest):
+async def get_manager_token(body: TokenRequest, request: Request):
     """
     Generate a manager JWT. Manager can publish microphone audio (push-to-talk)
     and subscribe to all worker video + audio streams in the room.
+    The livekit_url in the response is automatically adjusted to the client's
+    network — phone on LAN gets ws://192.168.x.x:7880, localhost gets ws://localhost:7880.
     """
     token = generate_manager_token(
         room_name=body.room_name,
@@ -130,12 +132,12 @@ async def get_manager_token(body: TokenRequest):
     return TokenResponse(
         token=token,
         room_name=body.room_name,
-        livekit_url=livekit_ws_url_for_client(),
+        livekit_url=livekit_ws_url_for_client(request.headers.get("origin", "")),
     )
 
 
 @router.post("/livekit/token/worker", response_model=TokenResponse)
-async def get_worker_token(body: TokenRequest):
+async def get_worker_token(body: TokenRequest, request: Request):
     """
     Generate a worker JWT. Worker publishes camera video + microphone audio
     and subscribes to manager audio instructions.
@@ -148,7 +150,7 @@ async def get_worker_token(body: TokenRequest):
     return TokenResponse(
         token=token,
         room_name=body.room_name,
-        livekit_url=livekit_ws_url_for_client(),
+        livekit_url=livekit_ws_url_for_client(request.headers.get("origin", "")),
     )
 
 

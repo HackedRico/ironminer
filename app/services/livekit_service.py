@@ -7,14 +7,31 @@ from livekit.api import ListRoomsRequest, ListParticipantsRequest
 from app.config import LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_HOST, LIVEKIT_PUBLIC_WS_URL
 
 
-def livekit_ws_url_for_client() -> str:
+def livekit_ws_url_for_client(request_origin: str = "") -> str:
     """
-    WebSocket URL to return to clients (browser, phone) in token response.
-    If LIVEKIT_PUBLIC_WS_URL is set (e.g. ws://YOUR_LAN_IP:7880), use it so
-    devices on the network can connect. Otherwise derive from LIVEKIT_HOST.
+    Return the LiveKit WebSocket URL the client should connect to.
+
+    Priority order:
+    1. LIVEKIT_PUBLIC_WS_URL env var (explicit override, e.g. for cloud LiveKit)
+    2. Auto-derived from the request's Origin header — if the client came from a
+       non-localhost host (phone, LAN laptop) we swap in that host at LiveKit's port.
+       This means zero config for LAN demos: the phone automatically gets
+       ws://192.168.x.x:7880 just because it connected from that IP.
+    3. Fallback: derive from LIVEKIT_HOST (always ws://localhost:7880 in dev).
     """
     if LIVEKIT_PUBLIC_WS_URL:
         return LIVEKIT_PUBLIC_WS_URL
+
+    if request_origin:
+        from urllib.parse import urlparse
+        parsed = urlparse(request_origin)
+        host = parsed.hostname or ""
+        # Only remap for non-local clients — localhost stays on localhost
+        if host and host not in ("localhost", "127.0.0.1", "::1"):
+            livekit_port = urlparse(LIVEKIT_HOST).port or 7880
+            scheme = "wss" if parsed.scheme == "https" else "ws"
+            return f"{scheme}://{host}:{livekit_port}"
+
     return LIVEKIT_HOST.replace("https://", "wss://").replace("http://", "ws://")
 
 

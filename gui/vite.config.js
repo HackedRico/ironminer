@@ -23,6 +23,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true, // listen on all interfaces so phone on same LAN can open http://YOUR_IP:5173
+    allowedHosts: true, // allow ngrok and other tunnel hosts (e.g. 5046-xxx.ngrok-free.app)
     proxy: {
       '/api': 'http://localhost:8000',
       '/ws': {

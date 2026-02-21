@@ -82,6 +82,28 @@ To use the Worker Simulator from your phone (same Wi-Fi as your computer):
 3. Start everything as above. Vite listens on all interfaces, so the app is at `http://YOUR_IP:5173`.
 4. On your phone browser open `http://YOUR_IP:5173/worker`, allow camera and mic, room **site-s1**, then Connect.
 
+## Demo from phone via ngrok (HTTPS, any network)
+
+Use ngrok when the phone is on a different network (e.g. cellular) or when LAN is blocked. **HTTPS is required** for camera/mic in mobile browsers — ngrok provides it automatically.
+
+1. **Install ngrok** (if not already): `winget install ngrok` or [ngrok.com/download](https://ngrok.com/download).
+2. **Log in:** `ngrok config add-authtoken YOUR_TOKEN` (free account at [ngrok.com](https://ngrok.com)).
+3. **Start both tunnels** (keep running in a separate terminal):
+   ```bash
+   ngrok start --all --config ngrok.yml
+   ```
+   You’ll see two URLs, e.g. `frontend → https://abc123.ngrok-free.app` and `livekit → https://def456.ngrok-free.app`.
+4. **In project `.env`** set the LiveKit tunnel (use **wss://** for the WebSocket URL):
+   ```
+   LIVEKIT_PUBLIC_WS_URL=wss://def456.ngrok-free.app
+   ```
+   (Use the **livekit** tunnel URL from step 3.)
+5. **Restart the FastAPI backend** so it picks up the new env.
+6. **On the phone** open `https://abc123.ngrok-free.app/worker` (use the **frontend** tunnel URL), allow camera and mic, then **Connect & share camera**.
+7. **On the laptop** open `http://localhost:5173` → **Live** tab → **Connect to Site Room** (site-s1). The phone’s feed should appear in the worker video grid.
+
+Frontend `getLiveKitWsUrl` trusts the backend’s `livekit_url` when not on localhost, so with `LIVEKIT_PUBLIC_WS_URL` set the phone correctly uses the LiveKit ngrok URL.
+
 ## Quick checks
 
 | Check | Command / URL |
