@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 from typing import Optional
 
 from app.services.supabase_client import get_supabase
 from app.models.site import Site
-from app.models.alert import Alert, AlertCreate
+from app.models.alert import Alert
 from app.models.streaming import FeedConfig
 from app.models.video import VideoProcessingResult, FrameData
 from app.models.analysis import SafetyReport
