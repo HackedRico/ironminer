@@ -149,6 +149,30 @@ export default function LiveStreamView({ site, selectedFeed }) {
         disabled={!isConnected}
       />
 
+      {/* Unlock worker audio (browsers block autoplay until user gesture) */}
+      {isConnected && workerStreams.size > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            document.querySelectorAll('audio.worker-audio').forEach((el) => {
+              el.play().catch(() => {})
+            })
+          }}
+          style={{
+            marginTop: 8,
+            padding: '6px 12px',
+            borderRadius: 8,
+            border: '1px solid rgba(255,255,255,0.15)',
+            background: 'rgba(255,255,255,0.06)',
+            color: '#94A3B8',
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          🔊 Hear workers
+        </button>
+      )}
+
       {/* ── Worker list (shown once connected) ───────────────────────────── */}
       {isConnected && (
         <div style={{ marginTop: 16 }}>

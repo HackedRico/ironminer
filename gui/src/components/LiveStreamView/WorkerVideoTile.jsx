@@ -33,6 +33,8 @@ export default function WorkerVideoTile({
     const el = audioRef.current
     if (!el || !audioTrack) return
     audioTrack.attach(el)
+    const p = el.play()
+    if (p && typeof p.catch === 'function') p.catch(() => {}) // autoplay may be blocked
     return () => { audioTrack.detach(el) }
   }, [audioTrack])
 
@@ -67,8 +69,8 @@ export default function WorkerVideoTile({
         }}
       />
 
-      {/* Hidden audio element — plays manager-subscribed worker audio */}
-      <audio ref={audioRef} autoPlay style={{ display: 'none' }} />
+      {/* Hidden audio element — plays manager-subscribed worker audio; class used by "Hear workers" button */}
+      <audio ref={audioRef} className="worker-audio" autoPlay playsInline style={{ display: 'none' }} />
 
       {/* Placeholder when no video track yet */}
       {!videoTrack && (
