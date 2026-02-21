@@ -144,7 +144,7 @@ export default function ReviewMode() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Zone Congestion Map</span>
                 </div>
-                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, marginBottom: 14, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
                   Real-time worker density by zone. Bars show congestion level — red zones have overlapping trades that may cause delays or safety conflicts.
                 </div>
                 {zones.length > 0
@@ -160,7 +160,7 @@ export default function ReviewMode() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Spatial Alerts</span>
                 </div>
-                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, marginBottom: 14, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
                   AI-detected safety and scheduling issues from uploaded footage. Expand an alert to see details and recommended actions.
                 </div>
                 {alerts.length === 0
@@ -180,7 +180,7 @@ export default function ReviewMode() {
                     Uploaded Media
                   </span>
                 </div>
-                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, marginBottom: 14, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
                   All video footage uploaded for this site. Click play to review clips, or upload new footage from the Briefing tab.
                 </div>
                 <MediaGallery siteId={selectedSite} usingMock={usingMock} />
