@@ -3,11 +3,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 from app.models.alert import Alert, AlertCreate
-from app.services.storage import ALERTS
+from app.services import db
 
 router = APIRouter()
 
-_counter = len(ALERTS)
+_counter = 5  # seed data has 5 alerts
 
 
 @router.get("", response_model=list[Alert])
@@ -17,20 +17,12 @@ async def list_alerts(
     acknowledged: bool | None = None,
     limit: int = 50,
 ):
-    alerts = list(ALERTS.values())
-    if site_id:
-        alerts = [a for a in alerts if a.site_id == site_id]
-    if severity:
-        alerts = [a for a in alerts if a.severity == severity]
-    if acknowledged is not None:
-        alerts = [a for a in alerts if a.acknowledged == acknowledged]
-    alerts.sort(key=lambda a: a.created_at, reverse=True)
-    return alerts[:limit]
+    return await db.get_alerts(site_id=site_id, severity=severity, acknowledged=acknowledged, limit=limit)
 
 
 @router.get("/{alert_id}", response_model=Alert)
 async def get_alert(alert_id: str):
-    alert = ALERTS.get(alert_id)
+    alert = await db.get_alert(alert_id)
     if not alert:
         raise HTTPException(404, "Alert not found")
     return alert
@@ -38,11 +30,9 @@ async def get_alert(alert_id: str):
 
 @router.patch("/{alert_id}/acknowledge", response_model=Alert)
 async def acknowledge_alert(alert_id: str):
-    alert = ALERTS.get(alert_id)
+    alert = await db.update_alert(alert_id, {"acknowledged": True})
     if not alert:
         raise HTTPException(404, "Alert not found")
-    alert.acknowledged = True
-    ALERTS[alert_id] = alert
     return alert
 
 
@@ -61,5 +51,4 @@ async def create_alert(body: AlertCreate):
         source_agent=body.source_agent,
         created_at=datetime.now(timezone.utc),
     )
-    ALERTS[alert_id] = alert
-    return alert
+    return await db.create_alert(alert)

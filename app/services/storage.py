@@ -95,7 +95,13 @@ FEEDS: dict[str, FeedConfig] = {
 }
 
 VIDEO_JOBS: dict[str, VideoJob] = {}
-VIDEO_RESULTS: dict[str, VideoProcessingResult] = {}
+
+# Seed mock video result so /api/safety/analyze works out of the box
+from app.data.mock_video_results import MOCK_VIDEO_RESULT  # noqa: E402
+
+VIDEO_RESULTS: dict[str, VideoProcessingResult] = {
+    MOCK_VIDEO_RESULT.job_id: MOCK_VIDEO_RESULT,
+}
 FRAMES: dict[str, list[FrameData]] = {}  # site_id -> frames
 SAFETY_REPORTS: dict[str, SafetyReport] = {}  # site_id -> latest
 PRODUCTIVITY_REPORTS: dict[str, ProductivityReport] = {}  # site_id -> latest

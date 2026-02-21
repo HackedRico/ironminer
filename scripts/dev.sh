@@ -18,9 +18,14 @@ echo ""
 
 # Start backend on all interfaces so LAN devices can reach it directly if needed
 echo "[Backend] Starting FastAPI on :8000"
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
-BACKEND_PID=$!
 
+UVICORN_CMD=".venv/bin/uvicorn"
+if [ ! -x "$UVICORN_CMD" ]; then
+  UVICORN_CMD="uvicorn"
+fi
+
+"$UVICORN_CMD" app.main:app --reload --host 0.0.0.0 --port 8000 &
+BACKEND_PID=$!
 # Start frontend (vite.config.js has host:true for LAN access)
 echo "[Frontend] Starting Vite on :5173"
 cd gui && npm run dev &

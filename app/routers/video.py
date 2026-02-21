@@ -1,15 +1,22 @@
 from __future__ import annotations
+import asyncio
+import logging
 import re
 import uuid as _uuid
 from pathlib import Path
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException
 from typing import Optional
 
 from app.models.video import VideoJob, VideoProcessingResult
-from app.services.storage import VIDEO_JOBS, VIDEO_RESULTS
+from app.services.storage import VIDEO_JOBS
+from app.services import db
 from app.services.job_queue import create_job, get_job
+from app.services.storage import VIDEO_JOBS, VIDEO_RESULTS
+from app.services.job_queue import create_job, get_job, update_job
 from app.agents.video_agent import VideoAgent
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 agent = VideoAgent()
@@ -24,6 +31,7 @@ def _sanitize(name: str) -> str:
 
 @router.post("/upload", response_model=VideoJob)
 async def upload_video(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     site_id: Optional[str] = Form(None),
     uploaded_by: Optional[str] = Form(None),
@@ -39,8 +47,31 @@ async def upload_video(
 
     rel_path = f"uploads/{disk_name}"
     job = create_job(sid, filename=original_name, uploaded_by=uploaded_by, file_path=rel_path)
-    # TODO: kick off agent.process() in background task
+    background_tasks.add_task(_process_video, job.job_id, sid, str(dest), frame_interval)
     return job
+
+
+async def _process_video(job_id: str, site_id: str, file_path: str, frame_interval: float):
+    """Run the video agent in the background and store the result."""
+    update_job(job_id, status="processing")
+    try:
+        result = await agent.process(
+            job_id=job_id,
+            site_id=site_id,
+            file_path=file_path,
+            frame_interval=frame_interval,
+        )
+        VIDEO_RESULTS[job_id] = result
+        update_job(
+            job_id,
+            status="completed",
+            total_frames=len(result.frames),
+            processed_frames=len(result.frames),
+        )
+        logger.info("Job %s completed — %d frames", job_id, len(result.frames))
+    except Exception as e:
+        logger.exception("Job %s failed", job_id)
+        update_job(job_id, status="failed", error=str(e))
 
 
 @router.get("/jobs", response_model=list[VideoJob])
@@ -63,7 +94,7 @@ async def get_job_status(job_id: str):
 
 @router.get("/jobs/{job_id}/result", response_model=VideoProcessingResult)
 async def get_job_result(job_id: str):
-    result = VIDEO_RESULTS.get(job_id)
+    result = await db.get_video_result(job_id)
     if not result:
         raise HTTPException(404, "Result not found — job may still be processing")
     return result
@@ -78,7 +109,7 @@ async def analyze_frame(body: dict):
 @router.post("/jobs/{job_id}/complete", response_model=VideoProcessingResult)
 async def complete_job(job_id: str, body: VideoProcessingResult):
     """Internal callback — Video Agent posts result when done."""
-    VIDEO_RESULTS[job_id] = body
+    await db.save_video_result(job_id, body.site_id, body)
     job = get_job(job_id)
     if job:
         job.status = "completed"
