@@ -6,7 +6,7 @@ from app.models.streaming import (
     FeedConfig,
     FeedCreate,
     LiveScanResult,
-    AutoscanRequest,
+    AutoScanRequest,
     TokenRequest,
     TokenResponse,
 )
