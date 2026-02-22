@@ -38,12 +38,8 @@ SITES: dict[str, Site] = {
     "s3": Site(
         id="s3", name="Oakfield Homes Ph.2", address="Oakfield Estate, Lots 14-28",
         status="review", progress=91, congestion="low",
-        trades=2, workers=8, frames=203, last_scan=now,
-        zones=[
-            Zone(zone="Lots 14-17 — Framing", congestion=2, trades=["Framing"], workers=4, status=ZoneStatus.ok),
-            Zone(zone="Lots 18-21 — Exterior", congestion=1, trades=["Cladding"], workers=3, status=ZoneStatus.ok),
-            Zone(zone="Lots 22-28 — Foundation", congestion=1, trades=["Concrete"], workers=1, status=ZoneStatus.ok),
-        ],
+        trades=0, workers=0, frames=0, last_scan=now,
+        zones=[],
     ),
 }
 
@@ -67,8 +63,6 @@ _seed_alerts = [
      "Lumber delivery staged across the main access road on the south side. Prevents equipment from reaching the west bay. Appeared between morning and midday scans.", "productivity"),
     ("s1", "Riverside Tower", AlertSeverity.low, "Formwork removal ahead of schedule — level 1",
      "Shores on level 1 east deck are 60% removed, ahead of the projected timeline. Positive progress indicator.", "productivity"),
-    ("s3", "Oakfield Homes Ph.2", AlertSeverity.low, "Exterior cladding progressing on south units",
-     "Facade installation detected on lots 18-21, consistent with expected schedule. No congestion issues in this zone.", "productivity"),
 ]
 
 for site_id, site_name, sev, title, detail, source in _seed_alerts:
@@ -82,7 +76,6 @@ for site_id, site_name, sev, title, detail, source in _seed_alerts:
 BRIEFINGS: dict[str, str] = {
     "s1": "The biggest issue today is Zone B on level 3. Three different crews — electrical, plumbing, and framing — are all trying to work in the same area at the same time. It's packed. Workers can barely move through, and the conduit staged on the floor is blocking the walkway.\n\nCompared to yesterday, congestion in Zone B got worse. It was two trades yesterday, now it's three. Zone C near the crane also has a safety concern — two workers spotted without hard hats in the swing radius. This is the second day in a row.\n\nThe good news: formwork removal on level 1 is running ahead of schedule. The east deck is clearing out faster than expected.\n\nRecommendation: Move the electrical crew in Zone B to the afternoon shift so they're not overlapping with framing. Address the hard hat issue in Zone C immediately — it's a repeat violation.",
     "s2": "Work is moving steadily but there's a logistics problem on the south side. A lumber delivery got staged right across the main access road, which means equipment can't get to the west bay. This showed up between the morning and midday scans — it wasn't there earlier.\n\nThe east bay has two trades sharing space (concrete and plumbing) but it's manageable for now. No safety flags today.\n\nRecommendation: Get the lumber restaged off the access road before the afternoon equipment run. If it stays, the west bay crew will be idle.",
-    "s3": "Everything is running smoothly. Exterior cladding is going up on lots 18 through 21, right on schedule. No congestion anywhere — the crews are well spread out across the site.\n\nCompared to last week, we've made good progress. The site is in the final stretch.\n\nRecommendation: No action needed. Consider pulling one crew to support Riverside Tower if they can be spared.",
 }
 
 FEEDS: dict[str, FeedConfig] = {

@@ -4,18 +4,22 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import sites, video, safety, productivity, alerts, streaming, workers, teams
+from app.routers import (
+    sites,
+    video,
+    safety,
+    productivity,
+    alerts,
+    streaming,
+    workers,
+    teams,
+)
+
 from app.services.team_service import initialize as initialize_teams
 
 app = FastAPI(title="IronSite Manager API", version="0.1.0")
 
-# Load persisted workers + teams from JSON (seeds defaults on first run)
-initialize_teams()
-
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
-
+# Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,6 +27,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Load persisted workers + teams from JSON (seeds defaults on first run)
+initialize_teams()
+
+# Uploads directory
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
+# API routers
 app.include_router(sites.router, prefix="/api/sites", tags=["Sites"])
 app.include_router(video.router, prefix="/api/video", tags=["Video Agent"])
 app.include_router(safety.router, prefix="/api/safety", tags=["Safety Agent"])

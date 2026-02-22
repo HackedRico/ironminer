@@ -6,11 +6,12 @@ from app.models.streaming import (
     FeedConfig,
     FeedCreate,
     LiveScanResult,
-    AutoscanRequest,
+    AutoScanRequest,
     TokenRequest,
     TokenResponse,
 )
 
+from app.services import db
 from app.services.storage import FEEDS
 
 from app.services.livekit_service import (
@@ -102,6 +103,16 @@ async def ws_alerts(ws: WebSocket):
             await ws.receive_text()
     except WebSocketDisconnect:
         ws_manager.disconnect("alerts", ws)
+
+
+@router.websocket("/ws/pipeline/{site_id}")
+async def ws_pipeline(ws: WebSocket, site_id: str):
+    await ws_manager.connect(f"pipeline:{site_id}", ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(f"pipeline:{site_id}", ws)
 
 
 @router.websocket("/ws/comms/{feed_id}")

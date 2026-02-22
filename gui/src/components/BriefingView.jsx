@@ -206,7 +206,7 @@ export default function BriefingView({ text, siteId, usingMock }) {
         {jobs.length > 0 && (
           <div style={{ marginTop: 10 }}>
             {jobs.map(job => (
-              <div key={job.id} style={{
+              <div key={job.job_id} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '9px 14px', marginBottom: 6,
                 background: 'rgba(255,255,255,0.02)', border: `1px solid ${C.border}`,
@@ -218,7 +218,7 @@ export default function BriefingView({ text, siteId, usingMock }) {
                   animation: job.status === 'processing' ? 'pulse 1.5s infinite' : 'none',
                 }} />
                 <div style={{ flex: 1, fontSize: 13, color: '#CBD5E1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {job.filename || job.id}
+                  {job.filename || job.job_id}
                 </div>
                 <div style={{ fontSize: 11, color: JOB_STATUS_COLOR[job.status] || C.muted, fontFamily: 'var(--mono)', flexShrink: 0 }}>
                   {JOB_STATUS_TEXT[job.status] || job.status}

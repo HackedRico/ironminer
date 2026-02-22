@@ -20,6 +20,7 @@ export const toggleAutoScan = (feedId, enabled, intervalSeconds = 30) =>
 export const connectLiveFeed = (feedId) => new WebSocket(wsUrl(`/api/streaming/ws/live/${feedId}`))
 export const connectAlerts = () => new WebSocket(wsUrl('/api/streaming/ws/alerts'))
 export const connectComms = (feedId) => new WebSocket(wsUrl(`/api/streaming/ws/comms/${feedId}`))
+export const connectPipeline = (siteId) => new WebSocket(wsUrl(`/api/streaming/ws/pipeline/${siteId}`))
 
 // ── LiveKit API calls ─────────────────────────────────────────────────────────
 

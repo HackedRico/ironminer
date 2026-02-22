@@ -5,8 +5,6 @@ load_dotenv()
 
 # Core API keys
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-VESTA_API_KEY = os.getenv("VESTA_API_KEY", "")
-VESTA_BASE_URL = os.getenv("VESTA_BASE_URL", "")
 
 # LiveKit configuration
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "devkey")
@@ -16,14 +14,15 @@ LIVEKIT_PUBLIC_WS_URL = os.getenv("LIVEKIT_PUBLIC_WS_URL", "").strip()
 
 # LLM configuration
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
 # Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
-# VASTA
-VASTA_API_KEY = os.getenv("VASTA_API_KEY", "")
-VASTA_BASE_URL = os.getenv("VASTA_BASE_URL", "")
-VASTA_MODEL_ID = os.getenv("VASTA_MODEL_ID", "llava-hf/LLaVA-NeXT-Video-34B-hf")
+# Vast.ai GPU instance
+VASTAI_API_KEY = os.getenv("VASTAI_API_KEY", "")
+VASTAI_BASE_URL = os.getenv("VASTAI_BASE_URL", "")
+VASTAI_INSTANCE_ID = os.getenv("VASTAI_INSTANCE_ID", "")
+VASTAI_MODEL_ID = os.getenv("VASTAI_MODEL_ID", "llava-hf/LLaVA-NeXT-Video-34B-hf")

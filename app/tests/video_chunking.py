@@ -5,7 +5,7 @@ Chunks are saved to app/tests/chunks/ for inspection.
 import os
 from pathlib import Path
 
-from app.agents.video_agent import split_video
+from app.utils.video import split_video
 
 TESTS_DIR = Path(__file__).parent
 VIDEO_PATH = str(TESTS_DIR / "14_transit_prep_mp.mp4")

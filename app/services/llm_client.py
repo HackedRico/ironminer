@@ -12,28 +12,25 @@ class LLMClient(ABC):
 
 
 class OllamaClient(LLMClient):
-    """Calls Ollama's OpenAI-compatible chat completions endpoint."""
+    """Calls Ollama via CLI subprocess (workaround for Homebrew 0.16.x serve bug)."""
 
-    def __init__(self, base_url: str = OLLAMA_BASE_URL, model: str = OLLAMA_MODEL):
-        self.url = f"{base_url}/v1/chat/completions"
+    def __init__(self, model: str = OLLAMA_MODEL):
         self.model = model
 
     async def chat(self, system: str, user: str) -> str:
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.3,
-        }
-        import httpx
+        import asyncio
+        import json
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(self.url, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        prompt = f"{system}\n\n---\n\n{user}"
+        proc = await asyncio.create_subprocess_exec(
+            "ollama", "run", self.model, prompt,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+        if proc.returncode != 0:
+            raise RuntimeError(f"ollama run failed: {stderr.decode().strip()}")
+        return stdout.decode().strip()
 
 
 class ClaudeClient(LLMClient):

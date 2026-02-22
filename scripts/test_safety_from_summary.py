@@ -1,21 +1,15 @@
-"""Video Agent — uses cached Twelve Labs Pegasus output + structured zone extraction.
-
-On video upload, reads the pre-generated summary from app/summarizer/summary.txt,
-builds structured ZoneAnalysis data from it, and returns a full VideoProcessingResult
-that the safety and productivity agents can process.
-
-To regenerate summary.txt with a new video:
-  python app/summarizer/summary.py --video path/to/video.mp4 --output app/summarizer/summary.txt
-"""
-from __future__ import annotations
-
-import logging
-from datetime import datetime, timezone
+"""Feed summary.txt through the safety + productivity agents and print the reports."""
+import asyncio
+import sys
 from pathlib import Path
 
-from app.agents.base import BaseAgent
+# Ensure project root is on path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from dotenv import load_dotenv
+load_dotenv()
+
 from app.models.video import (
-    FrameData,
     VideoProcessingResult,
     ZoneAnalysis,
     WorkerDetection,
@@ -25,24 +19,18 @@ from app.models.video import (
     EgressStatus,
     MaterialStack,
 )
-from app.utils.video import split_video
-
-logger = logging.getLogger(__name__)
-
-__all__ = ["VideoAgent", "split_video"]
-
-_SUMMARY_PATH = Path(__file__).resolve().parent.parent / "summarizer" / "summary.txt"
+from app.agents.safety_agent import SafetyAgent
+from app.agents.productivity_agent import ProductivityAgent
 
 
-def _build_zones_from_summary(text: str) -> list[ZoneAnalysis]:
-    """Map the Pegasus narrative into structured zone data for safety/productivity agents.
+def build_video_result_from_summary(text: str) -> VideoProcessingResult:
+    """Parse the Pegasus summary text into structured zone data for the agents.
 
-    This is a best-effort extraction based on the typical Pegasus output describing
-    a construction site video. The zones are derived from recurring spatial areas
-    identified in the summary text.
+    This is a best-effort extraction — maps the narrative observations into
+    the structured classifiers the safety agent expects.
     """
 
-    # Zone A — Plumbing area (blowtorch, copper pipes, main workspace)
+    # Zone A — Plumbing area (main workspace, blowtorch + copper pipes)
     zone_a = ZoneAnalysis(
         zone_id="z1",
         zone_name="Zone A — Interior Plumbing Area",
@@ -159,59 +147,52 @@ def _build_zones_from_summary(text: str) -> list[ZoneAnalysis]:
         area_sqft=200,
     )
 
-    return [zone_a, zone_b, zone_c, zone_d, zone_e]
+    return VideoProcessingResult(
+        job_id="test_summary",
+        site_id="s1",
+        zones=[zone_a, zone_b, zone_c, zone_d, zone_e],
+        metadata={"combined_briefing": text, "source": "summary.txt"},
+    )
 
 
-class VideoAgent(BaseAgent):
-    async def process(
-        self,
-        job_id: str,
-        site_id: str,
-        file_path: str,
-        frame_interval: float = 5.0,
-    ) -> VideoProcessingResult:
-        # Read cached Pegasus summary
-        if _SUMMARY_PATH.is_file():
-            analysis_text = _SUMMARY_PATH.read_text().strip()
-            logger.info("Loaded cached Pegasus summary: %d chars from %s", len(analysis_text), _SUMMARY_PATH)
-        else:
-            analysis_text = "No Pegasus summary available. Run: python app/summarizer/summary.py --video <path>"
-            logger.warning("summary.txt not found at %s", _SUMMARY_PATH)
+async def main():
+    summary_path = Path(__file__).resolve().parent.parent / "app" / "summarizer" / "summary.txt"
+    text = summary_path.read_text()
+    print(f"Loaded summary: {len(text)} chars\n")
 
-        # Build structured zones from the summary
-        zones = _build_zones_from_summary(analysis_text)
-        logger.info("Built %d structured zones from summary", len(zones))
+    result = build_video_result_from_summary(text)
+    print(f"Built VideoProcessingResult: {len(result.zones)} zones\n")
 
-        # Extract thumbnails from uploaded video
-        frame_data_list: list[FrameData] = []
-        video_path = Path(file_path).resolve()
-        if video_path.is_file():
-            try:
-                chunks = split_video(str(video_path), frame_interval)
-                for idx, chunk_path in enumerate(chunks):
-                    chunk_id = f"{job_id}_c{idx:04d}"
-                    frame_data_list.append(FrameData(
-                        id=chunk_id,
-                        site_id=site_id,
-                        timestamp=idx * frame_interval,
-                        image_data="",
-                        filename=f"chunk_{idx:04d}.mp4",
-                    ))
-            except Exception:
-                logger.warning("Thumbnail extraction failed, continuing without frames")
+    # Run Safety Agent
+    print("=" * 60)
+    print("SAFETY AGENT")
+    print("=" * 60)
+    safety = await SafetyAgent().process("s1", result)
+    print(f"\nOverall Risk: {safety.overall_risk}")
+    print(f"Violations: {len(safety.violations)}")
+    for v in safety.violations:
+        print(f"  [{v.severity.value}] {v.zone}: {v.type} — {v.description[:100]}")
+    print(f"\nPPE Compliance: {safety.ppe_compliance}")
+    print(f"Zone Adherence: {safety.zone_adherence}")
+    print(f"\nSummary:\n{safety.summary}\n")
 
-        logger.info("Job %s complete: %d zones, %d frames", job_id, len(zones), len(frame_data_list))
+    # Run Productivity Agent
+    print("=" * 60)
+    print("PRODUCTIVITY AGENT")
+    print("=" * 60)
+    prod = await ProductivityAgent().process("s1", result)
+    print(f"\nCongestion Trend: {prod.congestion_trend}")
+    print(f"Trade Overlaps: {len(prod.trade_overlaps)}")
+    for o in prod.trade_overlaps:
+        print(f"  [{o.severity}] {o.zone}: {', '.join(o.trades)} — {o.recommendation[:80]}")
+    print(f"\nZones:")
+    for z in prod.zones:
+        print(f"  {z.zone}: congestion={z.congestion}/5, workers={z.workers}, status={z.status.value}")
+    print(f"\nSuggestions:")
+    for s in prod.resource_suggestions:
+        print(f"  • {s}")
+    print(f"\nSummary:\n{prod.summary}")
 
-        return VideoProcessingResult(
-            job_id=job_id,
-            site_id=site_id,
-            frames=frame_data_list,
-            zones=zones,
-            zone_analyses={"full_analysis": analysis_text},
-            temporal_chain=[analysis_text],
-            metadata={
-                "combined_briefing": analysis_text,
-                "model": "pegasus1.2 (cached)",
-                "source": "summary.txt",
-            },
-        )
+
+if __name__ == "__main__":
+    asyncio.run(main())

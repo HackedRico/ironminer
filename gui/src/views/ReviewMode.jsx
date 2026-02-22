@@ -5,11 +5,13 @@ import AlertCard from '../components/AlertCard'
 import BriefingView from '../components/BriefingView'
 import MediaGallery from '../components/MediaGallery'
 import SafetyPanel from '../components/SafetyPanel'
+import ProductivityPanel from '../components/ProductivityPanel'
 import AddProjectModal from '../components/AddProjectModal'
 import SiteBIMView from '../components/SiteBIMView'
 import { fetchSites, fetchBriefing, createSite } from '../api/sites'
 import { fetchAlerts } from '../api/alerts'
-import { fetchZones } from '../api/productivity'
+import { fetchZones, fetchProductivityReport } from '../api/productivity'
+import { connectPipeline } from '../api/streaming'
 import { MOCK_SITES, MOCK_ALERTS, MOCK_BRIEFINGS, MOCK_ZONES } from '../utils/mockData'
 
 export default function ReviewMode() {
@@ -52,11 +54,47 @@ export default function ReviewMode() {
       // ── LIVE: fetch from backend API ──
       fetchBriefing(selectedSite).then(b => setBriefing(b.text)).catch(() => setBriefing(null))
       fetchAlerts({ site_id: selectedSite }).then(setAlerts).catch(() => setAlerts([]))
-      fetchZones(selectedSite).then(setZones).catch(() => {
-        const site = sites.find(s => s.id === selectedSite)
-        setZones(site?.zones || [])
-      })
+      const currentSite = sites.find(s => s.id === selectedSite)
+      // Skip productivity fetch for sites with no processed footage (avoids 404 noise)
+      if (currentSite && currentSite.frames === 0 && (!currentSite.zones || currentSite.zones.length === 0)) {
+        setZones([])
+      } else {
+        fetchProductivityReport(selectedSite)
+          .then(report => { if (report?.zones?.length) setZones(report.zones); else throw new Error('no zones') })
+          .catch(() => {
+            fetchZones(selectedSite).then(setZones).catch(() => {
+              setZones(currentSite?.zones || [])
+            })
+          })
+      }
     }
+  }, [selectedSite, usingMock])
+
+  // ── Listen for pipeline WebSocket updates → refresh data ──────────────────
+  useEffect(() => {
+    if (!selectedSite || usingMock) return
+    let ws
+    try {
+      ws = connectPipeline(selectedSite)
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.stage === 'video_complete') {
+            fetchBriefing(selectedSite).then(b => setBriefing(b.text)).catch(() => {})
+          }
+          if (msg.stage === 'productivity_complete') {
+            fetchProductivityReport(selectedSite)
+              .then(report => { if (report?.zones) setZones(report.zones) })
+              .catch(() => {})
+          }
+          if (msg.stage === 'pipeline_complete') {
+            // Refresh site list so frame counts / hasFootage update
+            fetchSites().then(data => setSites(data)).catch(() => {})
+          }
+        } catch {}
+      }
+    } catch {}
+    return () => { ws?.close() }
   }, [selectedSite, usingMock])
 
   const site = sites.find(s => s.id === selectedSite)
@@ -111,7 +149,7 @@ export default function ReviewMode() {
                 <p style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{site.address}</p>
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
-                {['briefing', 'zones', 'alerts', 'media', 'bim', 'safety'].map(t => (
+                {['briefing', 'zones', 'alerts', 'media', 'bim', 'safety', 'productivity'].map(t => (
                   <button key={t} onClick={() => setTab(t)} style={{
                     padding: '8px 18px', borderRadius: 8, border: '1px solid',
                     borderColor: tab === t ? 'rgba(249,115,22,0.3)' : 'rgba(255,255,255,0.06)',
@@ -218,6 +256,24 @@ export default function ReviewMode() {
                   Human-in-the-loop safety review. Run AI analysis on video data, review flagged violations, and dismiss false positives before they become alerts.
                 </div>
                 <SafetyPanel siteId={selectedSite} />
+              </div>
+            )}
+
+            {/* ── TAB: Productivity ────────────────────────────────────────── */}
+            {tab === 'productivity' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Productivity Analysis
+                  </span>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: 'rgba(249,115,22,0.15)', color: '#FB923C', letterSpacing: '0.08em' }}>
+                    PoC
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
+                  Zone congestion scoring, trade overlap detection, and resource optimization recommendations — auto-generated from video analysis pipeline.
+                </div>
+                <ProductivityPanel siteId={selectedSite} hasFootage={site?.frames > 0} />
               </div>
             )}
           </>
