@@ -10,48 +10,6 @@ const riskColor = {
   low: { bg: 'rgba(34,197,94,0.14)', border: '#22C55E', text: '#86EFAC' },
 }
 
-// Last-resort embedded mock — only shown if backend AND Supabase are both unreachable
-const MOCK_SAFETY_REPORT = {
-  s1: {
-    site_id: 's1',
-    overall_risk: 'critical',
-    summary: 'The Riverside Tower site presents critical safety concerns across multiple zones. Zone B on Level 3 is the highest priority — three trades are packed into 400 sqft with blocked egress, and two electricians are working at scaffold edge without harness tie-off (29 CFR 1926.502). Zone C has two workers in the crane swing radius without hard hats, a repeat violation. Zone E has active hot work without fire watch near stacked insulation, and electrical work on a live panel without LOTO signage. Immediate action required on fall protection and fire watch.',
-    violations: [
-      { zone: 'Zone A — Ground Level West', type: 'ppe_missing', severity: 'medium', description: 'Worker w_a3 (concrete) missing safety glasses and hi-vis vest near roadway. 29 CFR 1926.100 + 1926.201.', workers_affected: 1 },
-      { zone: 'Zone A — Ground Level West', type: 'ppe_missing', severity: 'medium', description: 'Worker w_a4 (concrete) missing hi-vis vest near roadway edge. 29 CFR 1926.201.', workers_affected: 1 },
-      { zone: 'Zone B — Level 3 East Scaffolding', type: 'ppe_missing', severity: 'medium', description: 'Worker w_b1 (electrical) missing hard hat at 30 ft on scaffold. 29 CFR 1926.100.', workers_affected: 1 },
-      { zone: 'Zone B — Level 3 East Scaffolding', type: 'zone_breach', severity: 'high', description: 'Worker w_b1 (electrical) at 30 ft with harness not tied off near edge. 29 CFR 1926.502(d) — PFAS must be anchored.', workers_affected: 1 },
-      { zone: 'Zone B — Level 3 East Scaffolding', type: 'zone_breach', severity: 'high', description: 'Worker w_b2 (electrical) at 30 ft with harness not tied off near edge. 29 CFR 1926.502(d).', workers_affected: 1 },
-      { zone: 'Zone B — Level 3 East Scaffolding', type: 'ppe_missing', severity: 'medium', description: 'Worker w_b4 (plumbing) missing hard hat at 30 ft on scaffold. 29 CFR 1926.100.', workers_affected: 1 },
-      { zone: 'Zone B — Level 3 East Scaffolding', type: 'zone_breach', severity: 'high', description: '3 trades (electrical, plumbing, framing) in 400 sqft area. Multi-trade congestion creates coordination hazards. OSHA multi-employer worksite doctrine applies.', workers_affected: 9 },
-      { zone: 'Zone B — Level 3 East Scaffolding', type: 'blocked_corridor', severity: 'medium', description: 'Egress path blocked by staged conduit bundles and pipe sections. 29 CFR 1926.34 — means of egress must remain clear.', workers_affected: 9 },
-      { zone: 'Zone C — North Exterior', type: 'ppe_missing', severity: 'high', description: 'Worker w_c1 (framing) in crane swing radius without hard hat. 29 CFR 1926.100 + 1926.1400 — struck-by + PPE violation.', workers_affected: 1 },
-      { zone: 'Zone C — North Exterior', type: 'ppe_missing', severity: 'high', description: 'Worker w_c2 (framing) in crane swing radius without hard hat. 29 CFR 1926.100 + 1926.1400.', workers_affected: 1 },
-      { zone: 'Zone C — North Exterior', type: 'clearance_issue', severity: 'high', description: 'Worker w_c3 standing under suspended crane load. 29 CFR 1926.1431 — no workers permitted under suspended loads.', workers_affected: 1 },
-      { zone: 'Zone C — North Exterior', type: 'clearance_issue', severity: 'high', description: 'Crane signal person lacks clear line of sight to operator. 29 CFR 1926.1419.', workers_affected: 1 },
-      { zone: 'Zone D — South Parking / Staging', type: 'blocked_corridor', severity: 'high', description: 'Delivery truck blocking emergency vehicle access lane. 29 CFR 1926.34 — means of egress must remain clear.', workers_affected: 2 },
-      { zone: 'Zone D — South Parking / Staging', type: 'clearance_issue', severity: 'medium', description: 'Lumber stack at 8 ft without cross-bracing. 29 CFR 1926.250(a)(1) — stacked materials must be stable.', workers_affected: 2 },
-      { zone: 'Zone E — Level 2 Interior', type: 'clearance_issue', severity: 'high', description: 'Hot work (angle grinder) without fire watch — sparks near stacked insulation. 29 CFR 1926.352(e).', workers_affected: 5 },
-      { zone: 'Zone E — Level 2 Interior', type: 'clearance_issue', severity: 'high', description: 'Work on live electrical panel without LOTO signage. 29 CFR 1926.417 — lockout/tagout required.', workers_affected: 5 },
-      { zone: 'Zone E — Level 2 Interior', type: 'zone_breach', severity: 'medium', description: 'Worker w_e5 on ladder without 3-point contact. 29 CFR 1926.1053(b)(1).', workers_affected: 1 },
-    ],
-    ppe_compliance: {
-      'Zone A — Ground Level West': false,
-      'Zone B — Level 3 East Scaffolding': false,
-      'Zone C — North Exterior': false,
-      'Zone D — South Parking / Staging': true,
-      'Zone E — Level 2 Interior': true,
-    },
-    zone_adherence: {
-      'Zone A — Ground Level West': false,
-      'Zone B — Level 3 East Scaffolding': false,
-      'Zone C — North Exterior': false,
-      'Zone D — South Parking / Staging': false,
-      'Zone E — Level 2 Interior': false,
-    },
-  },
-}
-
 /**
  * Defensively parse the summary field — the LLM sometimes returns
  * the raw JSON string {"summary": "..."} instead of just the text.
@@ -78,29 +36,19 @@ function parseSummary(raw) {
   return parts.length > 1 ? parts : [text]
 }
 
-// Source badge config
-const SOURCE_CONFIG = {
-  backend: { label: '● LIVE — fetched via backend API', color: '#4ADE80' },
-  supabase: { label: '● LIVE — fetched directly from Supabase', color: '#60A5FA' },
-  mock: { label: '⚠ OFFLINE — backend and Supabase unavailable, showing embedded mock', color: '#F59E0B' },
-}
 
 export default function SafetyPanel({ siteId }) {
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [supabaseError, setSupabaseError] = useState(null)
   const [dismissed, setDismissed] = useState({}) // index -> true
   const [expanded, setExpanded] = useState(null)
-  // 'backend' | 'supabase' | 'mock' | null
-  const [dataSource, setDataSource] = useState(null)
 
   // ── Auto-load existing report on mount / site change ──────────────────────
   const loadReport = async () => {
     try {
       const data = await fetchSafetyReport(siteId)
       setReport(data)
-      setDataSource('backend')
     } catch {
       // No report yet — that's fine
     }
@@ -132,41 +80,13 @@ export default function SafetyPanel({ siteId }) {
   const handleRun = async () => {
     setLoading(true)
     setError(null)
-    setSupabaseError(null)
     setDismissed({})
-    setDataSource(null)
     try {
-      // ── Path 1: backend is running ──────────────────────────────────────
       await runSafetyAnalysis(siteId, 'mock_vj_001')
       const data = await fetchSafetyReport(siteId)
       setReport(data)
-      setDataSource('backend')
-    } catch (backendErr) {
-      // ── Path 2: backend down — try Supabase directly ────────────────────
-      let sbErrorMsg = null
-      try {
-        const { fetchSafetyReportFromSupabase } = await import('../lib/supabase')
-        const { data: sbData, error: sbErr } = await fetchSafetyReportFromSupabase(siteId)
-        if (sbData) {
-          setReport(sbData)
-          setDataSource('supabase')
-          return
-        }
-        sbErrorMsg = sbErr || 'No data returned from Supabase'
-        console.warn('[SafetyPanel] Supabase fallback failed:', sbErrorMsg)
-      } catch (sbErr) {
-        sbErrorMsg = sbErr?.message || String(sbErr)
-        console.warn('[SafetyPanel] Supabase fallback threw:', sbErrorMsg)
-      }
-      // ── Path 3: truly offline — use embedded mock ───────────────────────
-      const mock = MOCK_SAFETY_REPORT[siteId]
-      if (mock) {
-        setReport(mock)
-        setDataSource('mock')
-        setSupabaseError(sbErrorMsg)
-      } else {
-        setError('Backend and Supabase both unavailable, and no mock data for this site.')
-      }
+    } catch (err) {
+      setError('Backend unavailable — make sure the server is running.')
     } finally {
       setLoading(false)
     }
@@ -212,25 +132,10 @@ export default function SafetyPanel({ siteId }) {
   }
 
   const rc = riskColor[report.overall_risk] || riskColor.low
-  const src = dataSource ? SOURCE_CONFIG[dataSource] : null
 
   return (
     <div>
       {runButton}
-
-      {/* ── Data source indicator ─────────────────────────────────────────── */}
-      {src && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: src.color, fontFamily: 'var(--mono)', letterSpacing: '0.05em' }}>
-            {src.label}
-          </div>
-          {dataSource === 'mock' && supabaseError && (
-            <div style={{ fontSize: 10, color: '#94A3B8', fontFamily: 'var(--mono)', marginTop: 3, paddingLeft: 2 }}>
-              Reason: {supabaseError}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Overall Risk Badge ────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
