@@ -105,6 +105,16 @@ async def ws_alerts(ws: WebSocket):
         ws_manager.disconnect("alerts", ws)
 
 
+@router.websocket("/ws/pipeline/{site_id}")
+async def ws_pipeline(ws: WebSocket, site_id: str):
+    await ws_manager.connect(f"pipeline:{site_id}", ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(f"pipeline:{site_id}", ws)
+
+
 @router.websocket("/ws/comms/{feed_id}")
 async def ws_comms(ws: WebSocket, feed_id: str):
     channel = f"comms:{feed_id}"

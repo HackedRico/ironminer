@@ -61,18 +61,14 @@ export const MOCK_SITES = [
     id: "s3",
     name: "Oakfield Homes Ph.2",
     address: "Oakfield Estate, Lots 14-28",
-    status: "review",          // in final review phase
+    status: "review",
     progress: 91,
-    congestion: "low",         // no congestion issues
-    trades: 2,
-    workers: 8,
-    frames: 203,
-    last_scan: "3 hr ago",
-    zones: [
-      { zone: "Lots 14-17 — Framing", congestion: 2, trades: ["Framing"], workers: 4, status: "ok" },
-      { zone: "Lots 18-21 — Exterior", congestion: 1, trades: ["Cladding"], workers: 3, status: "ok" },
-      { zone: "Lots 22-28 — Foundation", congestion: 1, trades: ["Concrete"], workers: 1, status: "ok" },
-    ],
+    congestion: "low",
+    trades: 0,
+    workers: 0,
+    frames: 0,
+    last_scan: "—",
+    zones: [],
   },
 ]
 
@@ -120,15 +116,6 @@ export const MOCK_ALERTS = [
     title: "Formwork removal ahead of schedule — level 1",
     detail: "Shores on level 1 east deck are 60% removed, ahead of the projected timeline. Positive progress indicator.",
   },
-  {
-    id: "a_005",
-    site_id: "s3",
-    site_name: "Oakfield Homes Ph.2",
-    severity: "low",
-    source_agent: "productivity",
-    title: "Exterior cladding progressing on south units",
-    detail: "Facade installation detected on lots 18-21, consistent with expected schedule. No congestion issues in this zone.",
-  },
 ]
 
 
@@ -149,10 +136,6 @@ export const MOCK_BRIEFINGS = {
     "The east bay has two trades sharing space (concrete and plumbing) but it's manageable for now. No safety flags today.\n\n" +
     "Recommendation: Get the lumber restaged off the access road before the afternoon equipment run. If it stays, the west bay crew will be idle.",
 
-  s3:
-    "Everything is running smoothly. Exterior cladding is going up on lots 18 through 21, right on schedule. No congestion anywhere — the crews are well spread out across the site.\n\n" +
-    "Compared to last week, we've made good progress. The site is in the final stretch.\n\n" +
-    "Recommendation: No action needed. Consider pulling one crew to support Riverside Tower if they can be spared.",
 }
 
 
@@ -179,7 +162,7 @@ export const MOCK_FEEDS = [
 export const MOCK_ZONES = {
   s1: MOCK_SITES[0].zones,
   s2: MOCK_SITES[1].zones,
-  s3: MOCK_SITES[2].zones,
+  s3: [],
 }
 
 
@@ -246,26 +229,7 @@ export const MOCK_TIMELINE = {
       ai_summary: null,
     },
   ],
-  s3: [
-    {
-      id: "tl_s3_1",
-      who: "Site Manager",
-      timestamp: "2025-02-21T13:20:00Z",
-      source: "upload",
-      video: "lots_18_21_cladding.mp4",
-      action: "Uploaded facade progress footage — Lots 18–21",
-      ai_summary: "Exterior cladding installation 70% complete on lots 18–21. No congestion. Two workers confirmed on scaffolding with correct PPE. On track to finish by end of week.",
-    },
-    {
-      id: "tl_s3_2",
-      who: "Site Manager",
-      timestamp: "2025-02-20T15:00:00Z",
-      source: "upload",
-      video: "foundation_lots_22_28.mp4",
-      action: "Uploaded foundation inspection footage — Lots 22–28",
-      ai_summary: "Foundation pour complete and curing. Single concrete crew on site, no issues. Area clear of debris.",
-    },
-  ],
+  s3: [],
 }
 
 // ── HELPER: check if backend is reachable ────────────────────────────────────

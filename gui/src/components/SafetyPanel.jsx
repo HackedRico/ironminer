@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { runSafetyAnalysis, fetchSafetyReport } from '../api/safety'
+import { connectPipeline } from '../api/streaming'
 import { severityStyle } from '../utils/colors'
 
 const riskColor = {
@@ -93,6 +94,40 @@ export default function SafetyPanel({ siteId }) {
   const [expanded, setExpanded] = useState(null)
   // 'backend' | 'supabase' | 'mock' | null
   const [dataSource, setDataSource] = useState(null)
+
+  // ── Auto-load existing report on mount / site change ──────────────────────
+  const loadReport = async () => {
+    try {
+      const data = await fetchSafetyReport(siteId)
+      setReport(data)
+      setDataSource('backend')
+    } catch {
+      // No report yet — that's fine
+    }
+  }
+
+  useEffect(() => {
+    if (!siteId) return
+    loadReport()
+  }, [siteId])
+
+  // ── Listen for pipeline WebSocket updates ────────────────────────────────
+  useEffect(() => {
+    if (!siteId) return
+    let ws
+    try {
+      ws = connectPipeline(siteId)
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.stage === 'safety_complete') {
+            loadReport()
+          }
+        } catch {}
+      }
+    } catch {}
+    return () => { ws?.close() }
+  }, [siteId])
 
   const handleRun = async () => {
     setLoading(true)

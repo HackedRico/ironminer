@@ -14,7 +14,7 @@ LIVEKIT_PUBLIC_WS_URL = os.getenv("LIVEKIT_PUBLIC_WS_URL", "").strip()
 
 # LLM configuration
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
 # Supabase

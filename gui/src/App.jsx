@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import NavBar from './components/NavBar'
 import ReviewMode from './views/ReviewMode'
 import LiveMode from './views/LiveMode'
-import ProductivityMode from './views/ProductivityMode'
 import { fetchAlerts } from './api/alerts'
 import { fetchSites } from './api/sites'
 import { MOCK_ALERTS, MOCK_SITES } from './utils/mockData'
@@ -31,7 +30,6 @@ export default function App() {
       <main style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 32px' }}>
         {mode === 'review' && <ReviewMode />}
         {mode === 'live' && <LiveMode />}
-        {mode === 'productivity' && <ProductivityMode />}
       </main>
     </div>
   )
