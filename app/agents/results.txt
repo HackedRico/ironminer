@@ -1,0 +1,144 @@
+israelogwu@Israels-MacBook-Air ironminer % /Users/israelogwu/Documents/vscode/ironminer/.venv/bin/python -m 
+app.agents.prod_semantics \
+>   --vlm_json tests/test_vlm_result.json \
+>   --standards app/agents/standards.txt
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights: 100%|█████████| 103/103 [00:00<00:00, 3536.72it/s, Materializing param=pooler.dense.weight]
+BertModel LOAD REPORT from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED    :can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+============================================================
+ZONE COMPLETION EVALUATION
+============================================================
+
+Zone: Zone A — Ground Level West
+Completion Score: 0.557
+Standards: 1/1 passed
+
+  [PASS] 0.557 | Zone is free of debris and loose materials.
+All required PPE is present on all workers.
+Electrical cords are routed with no tripping hazards.
+Rebar is installed and tied according to plan.
+         evidence: Zone analysis: Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and
+
+All standards met.
+------------------------------------------------------------
+
+Zone: Zone B — Level 3 East Scaffolding
+Completion Score: 0.637
+Standards: 1/1 passed
+
+  [PASS] 0.637 | Zone is free of debris and loose materials.
+All required PPE is present on all workers.
+Electrical cords are routed with no tripping hazards.
+Rebar is installed and tied according to plan.
+         evidence: Zone analysis: Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber 
+
+All standards met.
+------------------------------------------------------------
+israelogwu@Israels-MacBook-Air ironminer % cat -A /Users/israelogwu/Documents/vscode/ironminer/app/agents/st
+andards.txt
+cat: illegal option -- A
+usage: cat [-belnstuv] [file ...]
+israelogwu@Israels-MacBook-Air ironminer % cat -e /Users/israelogwu/Documents/vscode/ironminer/app/agents/st
+andards.txt
+Zone is free of debris and loose materials.$
+All required PPE is present on all workers.$
+Electrical cords are routed with no tripping hazards.$
+Rebar is installed and tied according to plan.%                                                             
+israelogwu@Israels-MacBook-Air ironminer % /Users/israelogwu/Documents/vscode/ironminer/.venv/bin/python -m 
+app.agents.prod_semantics \
+>   --vlm_json tests/test_vlm_result.json \
+>   --standards app/agents/standards.txt 2>/dev/null
+============================================================
+ZONE COMPLETION EVALUATION
+============================================================
+
+Zone: Zone A — Ground Level West
+Completion Score: 0.291
+Standards: 0/4 passed
+
+  [FAIL] 0.415 | Zone is free of debris and loose materials.
+         evidence: Zone analysis: Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and
+  [FAIL] 0.291 | Rebar is installed and tied according to plan.
+         evidence: Zone analysis: Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and
+  [FAIL] 0.235 | Electrical cords are routed with no tripping hazards.
+         evidence: Zone analysis: Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and
+  [FAIL] 0.223 | All required PPE is present on all workers.
+         evidence: Zone analysis: Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and
+
+Unmet standards:
+- All required PPE is present on all workers. (score: 0.22)
+- Electrical cords are routed with no tripping hazards. (score: 0.24)
+- Rebar is installed and tied according to plan. (score: 0.29)
+- Zone is free of debris and loose materials. (score: 0.42)
+------------------------------------------------------------
+
+Zone: Zone B — Level 3 East Scaffolding
+Completion Score: 0.357
+Standards: 0/4 passed
+
+  [FAIL] 0.449 | Zone is free of debris and loose materials.
+         evidence: Zone analysis: Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber 
+  [FAIL] 0.362 | Electrical cords are routed with no tripping hazards.
+         evidence: Zone analysis: Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber 
+  [FAIL] 0.321 | Rebar is installed and tied according to plan.
+         evidence: Zone analysis: Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber 
+  [FAIL] 0.295 | All required PPE is present on all workers.
+         evidence: Zone analysis: Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber 
+
+Unmet standards:
+- All required PPE is present on all workers. (score: 0.30)
+- Rebar is installed and tied according to plan. (score: 0.32)
+- Electrical cords are routed with no tripping hazards. (score: 0.36)
+- Zone is free of debris and loose materials. (score: 0.45)
+------------------------------------------------------------
+israelogwu@Israels-MacBook-Air ironminer % /Users/israelogwu/Documents/vscode/ironminer/.venv/bin/python -m 
+app.agents.prod_semantics \
+>   --vlm_json tests/test_vlm_result.json \
+>   --standards app/agents/standards.txt \
+>   --pass_threshold 0.35 2>/dev/null
+============================================================
+ZONE COMPLETION EVALUATION
+============================================================
+
+Zone: Zone A — Ground Level West
+Completion Score: 0.291
+Standards: 1/4 passed
+
+  [PASS] 0.415 | Zone is free of debris and loose materials.
+         evidence: Zone analysis: Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and
+  [FAIL] 0.291 | Rebar is installed and tied according to plan.
+         evidence: Zone analysis: Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and
+  [FAIL] 0.235 | Electrical cords are routed with no tripping hazards.
+         evidence: Zone analysis: Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and
+  [FAIL] 0.223 | All required PPE is present on all workers.
+         evidence: Zone analysis: Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and
+
+Unmet standards:
+- All required PPE is present on all workers. (score: 0.22)
+- Electrical cords are routed with no tripping hazards. (score: 0.24)
+- Rebar is installed and tied according to plan. (score: 0.29)
+------------------------------------------------------------
+
+Zone: Zone B — Level 3 East Scaffolding
+Completion Score: 0.357
+Standards: 2/4 passed
+
+  [PASS] 0.449 | Zone is free of debris and loose materials.
+         evidence: Zone analysis: Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber 
+  [PASS] 0.362 | Electrical cords are routed with no tripping hazards.
+         evidence: Zone analysis: Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber 
+  [FAIL] 0.321 | Rebar is installed and tied according to plan.
+         evidence: Zone analysis: Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber 
+  [FAIL] 0.295 | All required PPE is present on all workers.
+         evidence: Zone analysis: Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber 
+
+Unmet standards:
+- All required PPE is present on all workers. (score: 0.30)
+- Rebar is installed and tied according to plan. (score: 0.32)
+------------------------------------------------------------

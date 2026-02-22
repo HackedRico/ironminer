@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 fastapi==0.129.0
 uvicorn==0.41.0
 python-multipart==0.0.22
@@ -67,3 +68,14 @@ Pillow>=10.0.0
 transformers>=4.40.0
 torch>=2.0.0
 accelerate>=0.30.0
+=======
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.4
+anthropic==0.44.0
+websockets==14.1
+python-dotenv==1.0.1
+sentence-transformers
+torch
+>>>>>>> Stashed changes
