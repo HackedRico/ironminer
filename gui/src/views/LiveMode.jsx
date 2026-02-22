@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import LiveStreamView from '../components/LiveStreamView'
 import LiveWorkerFeedCard from '../components/LiveStreamView/LiveWorkerFeedCard'
-import { fetchFeeds } from '../api/streaming'
+import { fetchFeeds, fetchSiteNotes, fetchWorkers as fetchLiveWorkers, submitSiteWorld, submitWorldFromFrames, fetchWorldStatus } from '../api/streaming'
 import { fetchSites } from '../api/sites'
 import { fetchSiteWorkers, fetchTeams } from '../api/teams'
 import { MOCK_FEEDS, MOCK_SITES, MOCK_WORKERS } from '../utils/mockData'
@@ -19,6 +19,15 @@ const TRADE_COLORS = {
 
 const TEAM_COLORS = ['#F97316','#3B82F6','#8B5CF6','#10B981','#F59E0B','#EC4899','#06B6D4','#84CC16']
 
+const CAPTURE_ANGLES = [
+  'Face forward (0°)',
+  'Turn right 60°',
+  'Turn right 120°',
+  'Face opposite (180°)',
+  'Turn left 120°',
+  'Turn left 60°',
+]
+
 function getLiveIdentityForWorker(worker, liveWorkerStreams) {
   if (!worker || !liveWorkerStreams?.size) return null
   for (const [identity, stream] of liveWorkerStreams.entries()) {
@@ -26,6 +35,276 @@ function getLiveIdentityForWorker(worker, liveWorkerStreams) {
     if (name === worker.name || identity === worker.id) return identity
   }
   return null
+}
+
+function SiteScanPanel({ worldJob, liveWorkerStream, workerName, selectedWorkerIdentity, onSubmitFrames, onUpload, onReset }) {
+  const [dragOver, setDragOver] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [capturing, setCapturing] = useState(false)
+  const [capturedFrames, setCapturedFrames] = useState([])
+
+  const status = worldJob?.status
+  const hasLiveWorker = !!liveWorkerStream
+  const step = capturedFrames.length
+  const allCaptured = step >= 6
+
+  const captureFrame = () => {
+    const video = liveWorkerStream?.videoTrack?.attachedElements?.[0]
+    if (!video) return null
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || 640
+    canvas.height = video.videoHeight || 480
+    canvas.getContext('2d').drawImage(video, 0, 0)
+    return canvas.toDataURL('image/jpeg', 0.85)
+  }
+
+  const handleCapture = () => {
+    const frame = captureFrame()
+    if (!frame) return
+    setCapturedFrames(prev => [...prev, frame])
+  }
+
+  const handleGenerate = async () => {
+    if (capturedFrames.length < 2) return
+    setSubmitting(true)
+    await onSubmitFrames(capturedFrames)
+    setSubmitting(false)
+    setCapturing(false)
+    setCapturedFrames([])
+  }
+
+  const handleFile = async (file) => {
+    if (!file) return
+    setSubmitting(true)
+    await onUpload(file)
+    setSubmitting(false)
+  }
+
+  const resetCapture = () => {
+    setCapturing(false)
+    setCapturedFrames([])
+  }
+
+  return (
+    <div style={{
+      marginTop: 12,
+      borderRadius: 10,
+      border: `1px solid ${status === 'done' ? 'rgba(34,197,94,0.25)' : status === 'error' ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.07)'}`,
+      background: 'rgba(255,255,255,0.03)',
+      overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '10px 14px',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+      }}>
+        <span style={{ fontSize: 9, fontFamily: 'var(--mono)', color: '#475569', letterSpacing: '0.1em', flex: 1 }}>
+          3D SITE WORLD
+        </span>
+        {(worldJob || capturing) && (
+          <button onClick={() => { onReset(); resetCapture() }} title="Clear" style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#475569', fontSize: 14, lineHeight: 1, padding: 0,
+          }}>✕</button>
+        )}
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: '12px 14px' }}>
+
+        {/* ── Idle state ── */}
+        {!worldJob && !capturing && (
+          hasLiveWorker ? (
+            // Live worker selected — offer guided capture
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+              <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', lineHeight: 1.5 }}>
+                Ask <strong style={{ color: '#94a3b8' }}>{workerName || selectedWorkerIdentity}</strong> to
+                slowly turn 360° while you capture 6 angles.
+              </div>
+              <button
+                onClick={() => setCapturing(true)}
+                style={{
+                  padding: '9px 20px', borderRadius: 7, border: 'none',
+                  background: '#F97316', color: '#0a0a0a', fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', letterSpacing: '-0.01em',
+                }}
+              >
+                Start 3D Capture
+              </button>
+            </div>
+          ) : (
+            // No live worker — file drop fallback
+            <label
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]) }}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                padding: '18px 12px', borderRadius: 8, cursor: submitting ? 'default' : 'pointer',
+                border: `1px dashed ${dragOver ? '#F97316' : 'rgba(255,255,255,0.1)'}`,
+                background: dragOver ? 'rgba(249,115,22,0.06)' : 'transparent',
+                transition: 'border-color 0.15s, background 0.15s',
+              }}
+            >
+              <input type="file" accept="video/*,image/*" style={{ display: 'none' }}
+                onChange={e => handleFile(e.target.files[0])} disabled={submitting} />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={dragOver ? '#F97316' : '#475569'} strokeWidth="1.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <span style={{ fontSize: 11, color: dragOver ? '#F97316' : '#475569', textAlign: 'center', lineHeight: 1.4 }}>
+                {submitting ? 'Uploading…' : 'Drop video or image\nto generate 3D world'}
+              </span>
+            </label>
+          )
+        )}
+
+        {/* ── Capture flow ── */}
+        {!worldJob && capturing && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Current angle instruction */}
+            {!allCaptured && (
+              <div style={{
+                background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)',
+                borderRadius: 7, padding: '8px 12px', textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: '#F97316', letterSpacing: '0.1em', marginBottom: 3 }}>
+                  ANGLE {step + 1} OF 6
+                </div>
+                <div style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600 }}>
+                  {CAPTURE_ANGLES[step]}
+                </div>
+              </div>
+            )}
+
+            {/* Frame thumbnail strip */}
+            <div style={{ display: 'flex', gap: 4 }}>
+              {capturedFrames.map((frame, i) => (
+                <img
+                  key={i}
+                  src={frame}
+                  alt={`Frame ${i + 1}`}
+                  style={{
+                    width: 44, height: 33, borderRadius: 4, objectFit: 'cover',
+                    border: '1px solid rgba(34,197,94,0.35)', flexShrink: 0,
+                  }}
+                />
+              ))}
+              {Array.from({ length: Math.max(0, 6 - step) }).map((_, i) => (
+                <div key={`ph-${i}`} style={{
+                  width: 44, height: 33, borderRadius: 4, flexShrink: 0,
+                  border: '1px dashed rgba(255,255,255,0.08)',
+                  background: 'rgba(255,255,255,0.02)',
+                }} />
+              ))}
+            </div>
+
+            {/* Action button */}
+            {!allCaptured ? (
+              <button
+                onClick={handleCapture}
+                style={{
+                  padding: '9px 0', borderRadius: 7,
+                  border: '1px solid rgba(249,115,22,0.3)',
+                  background: 'rgba(249,115,22,0.12)', color: '#F97316',
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                Capture
+              </button>
+            ) : (
+              <button
+                onClick={handleGenerate}
+                disabled={submitting}
+                style={{
+                  padding: '9px 0', borderRadius: 7, border: 'none',
+                  background: submitting ? '#374151' : '#F97316',
+                  color: submitting ? '#9ca3af' : '#0a0a0a',
+                  fontSize: 12, fontWeight: 700, cursor: submitting ? 'default' : 'pointer',
+                }}
+              >
+                {submitting ? 'Submitting…' : 'Generate 3D World'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── Generating ── */}
+        {worldJob && status === 'generating' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%', background: '#F97316', flexShrink: 0,
+                animation: 'pulse 1.5s infinite',
+              }} />
+              <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Generating…</span>
+            </div>
+            {worldJob.progress && (
+              <p style={{ margin: 0, fontSize: 11, color: '#475569', lineHeight: 1.4 }}>
+                {worldJob.progress}
+              </p>
+            )}
+            <p style={{ margin: 0, fontSize: 10, color: '#334155', fontFamily: 'var(--mono)' }}>
+              World Labs is building your 3D site model. This typically takes 5–10 minutes.
+            </p>
+          </div>
+        )}
+
+        {/* ── Done ── */}
+        {worldJob && status === 'done' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600, fontFamily: 'var(--mono)' }}>
+              ✓ 3D world ready
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                onClick={() => window.open(worldJob.marble_url, '_blank')}
+                style={{
+                  flex: 1, padding: '8px 10px', borderRadius: 7, border: 'none',
+                  background: '#22c55e', color: '#0a0f0a', fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Open 3D World
+              </button>
+              <button
+                onClick={() => window.open(worldJob.worldvr_url, '_blank')}
+                title="Open in WebVR"
+                style={{
+                  padding: '8px 10px', borderRadius: 7,
+                  border: '1px solid rgba(34,197,94,0.3)',
+                  background: 'rgba(34,197,94,0.08)', color: '#22c55e',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                VR
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Error ── */}
+        {worldJob && status === 'error' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600 }}>Generation failed</span>
+            <p style={{ margin: 0, fontSize: 11, color: '#64748b', lineHeight: 1.4 }}>
+              {worldJob.error || 'Unknown error'}
+            </p>
+            <button onClick={onReset} style={{
+              padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.3)',
+              background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 12,
+              cursor: 'pointer', alignSelf: 'flex-start',
+            }}>
+              Try again
+            </button>
+          </div>
+        )}
+
+      </div>
+    </div>
+  )
 }
 
 function WorkerRow({ worker, isLive, selected, onClick }) {
@@ -153,11 +432,16 @@ export default function LiveMode() {
   const [livekitAvailable, setLivekitAvailable] = useState(false)
   const [liveWorkerStreams, setLiveWorkerStreams] = useState(new Map())
   const [selectedWorkerIdentity, setSelectedWorkerIdentity] = useState(null)
+  const [feedNoteCounts, setFeedNoteCounts] = useState({})
+  const [feedNoteSnippets, setFeedNoteSnippets] = useState({})
+  const [workerFeedMap, setWorkerFeedMap] = useState({})
 
   const [tab, setTab] = useState('all')
   const [selectedSite, setSelectedSite] = useState(null)
   const [siteWorkers, setSiteWorkers] = useState([])
   const [siteTeams, setSiteTeams] = useState([])
+  const [worldJob, setWorldJob] = useState(null)
+  const [worldPolling, setWorldPolling] = useState(false)
 
   const today = todayISO()
 
@@ -177,6 +461,43 @@ export default function LiveMode() {
 
   useEffect(() => {
     if (!selectedSite) return
+    let cancelled = false
+    fetchLiveWorkers(selectedSite)
+      .then(list => {
+        if (cancelled) return
+        const map = {}
+        list.forEach(w => {
+          if (w?.identity && w?.feed_id) map[w.identity] = w.feed_id
+        })
+        setWorkerFeedMap(map)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [selectedSite])
+
+  useEffect(() => {
+    if (!selectedSite) return
+    let cancelled = false
+    fetchSiteNotes(selectedSite)
+      .then(notes => {
+        if (cancelled) return
+        // Compute per-feed counts/snippets for the Live Now cards
+        const counts = {}
+        const snippets = {}
+        for (const n of notes) {
+          if (!n.feed_id) continue
+          counts[n.feed_id] = (counts[n.feed_id] || 0) + 1
+          if (!snippets[n.feed_id]) snippets[n.feed_id] = n.transcript
+        }
+        setFeedNoteCounts(counts)
+        setFeedNoteSnippets(snippets)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [selectedSite])
+
+  useEffect(() => {
+    if (!selectedSite) return
     fetchSiteWorkers(selectedSite)
       .then(setSiteWorkers)
       .catch(() => setSiteWorkers(MOCK_WORKERS[selectedSite] || []))
@@ -185,10 +506,68 @@ export default function LiveMode() {
       .catch(() => setSiteTeams([]))
   }, [selectedSite])
 
+  // Poll world generation status every 15s
+  useEffect(() => {
+    if (!worldPolling || !worldJob) return
+    const id = setInterval(async () => {
+      try {
+        const updated = await fetchWorldStatus(worldJob.id)
+        setWorldJob(updated)
+        if (updated.status === 'done' || updated.status === 'error') setWorldPolling(false)
+      } catch { setWorldPolling(false) }
+    }, 15_000)
+    return () => clearInterval(id)
+  }, [worldPolling, worldJob?.id])
+
+  const handleSiteWorldUpload = async (file) => {
+    const fd = new FormData()
+    fd.append('site_id', selectedSite || 's1')
+    fd.append('file', file)
+    fd.append('input_type', file.type.startsWith('image/') ? 'image' : 'video')
+    fd.append('display_name', `${site?.name || 'Site'} — ${new Date().toLocaleDateString()}`)
+    try {
+      const job = await submitSiteWorld(fd)
+      setWorldJob(job)
+      setWorldPolling(true)
+    } catch (e) {
+      setWorldJob({ id: 'err', status: 'error', error: e.message || 'Submission failed' })
+    }
+  }
+
+  const handleSubmitFrames = async (frames) => {
+    const stream = selectedWorkerIdentity ? liveWorkerStreams.get(selectedWorkerIdentity) : null
+    const wName = stream?.participant?.name || selectedWorkerIdentity || 'Worker'
+    const displayName = `${site?.name || 'Site'} — ${wName} — ${new Date().toLocaleDateString()}`
+    try {
+      const job = await submitWorldFromFrames(selectedSite || 's1', frames, selectedWorkerIdentity, displayName)
+      setWorldJob(job)
+      setWorldPolling(true)
+    } catch (e) {
+      setWorldJob({ id: 'err', status: 'error', error: e.message || 'Submission failed' })
+    }
+  }
+
   const feed = feeds.find(f => f.id === selectedFeed)
   const site = feed ? sites.find(s => s.id === feed.site_id) || null : null
   const assignedIds = new Set(siteTeams.flatMap(t => t.worker_ids))
   const unassignedWorkers = siteWorkers.filter(w => !assignedIds.has(w.id))
+
+  const feedIdForParticipant = (participant) => {
+    const identity = participant?.identity
+    if (identity && workerFeedMap[identity]) return workerFeedMap[identity]
+    const name = participant?.name
+    if (!name) return null
+    const byWorker = feeds.find(f => (f.worker || '') === name)
+    return byWorker?.id || null
+  }
+
+  const handleNoteSaved = (feedId, transcript = '') => {
+    if (!feedId) return
+    setFeedNoteCounts(prev => ({ ...prev, [feedId]: (prev[feedId] || 0) + 1 }))
+    if (transcript) {
+      setFeedNoteSnippets(prev => ({ ...prev, [feedId]: transcript }))
+    }
+  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 20 }}>
@@ -196,13 +575,25 @@ export default function LiveMode() {
       {/* ── Main feed ──────────────────────────────────────────────────────── */}
       <div>
         {livekitAvailable ? (
-          <LiveStreamView
-            site={site}
-            selectedFeed={feed}
-            onWorkerStreamsChange={setLiveWorkerStreams}
-            selectedWorkerIdentity={selectedWorkerIdentity}
-            onSelectWorker={setSelectedWorkerIdentity}
-          />
+          <>
+            <LiveStreamView
+              site={site}
+              selectedFeed={feed}
+              onWorkerStreamsChange={setLiveWorkerStreams}
+              selectedWorkerIdentity={selectedWorkerIdentity}
+              onSelectWorker={setSelectedWorkerIdentity}
+              onNoteSaved={handleNoteSaved}
+            />
+            <SiteScanPanel
+              worldJob={worldJob}
+              liveWorkerStream={selectedWorkerIdentity ? liveWorkerStreams.get(selectedWorkerIdentity) : null}
+              workerName={selectedWorkerIdentity ? liveWorkerStreams.get(selectedWorkerIdentity)?.participant?.name : null}
+              selectedWorkerIdentity={selectedWorkerIdentity}
+              onSubmitFrames={handleSubmitFrames}
+              onUpload={handleSiteWorldUpload}
+              onReset={() => { setWorldJob(null); setWorldPolling(false) }}
+            />
+          </>
         ) : (
           <>
             {/* Video placeholder */}
@@ -312,6 +703,15 @@ export default function LiveMode() {
                 </svg>
               </button>
             </div>
+            <SiteScanPanel
+              worldJob={worldJob}
+              liveWorkerStream={selectedWorkerIdentity ? liveWorkerStreams.get(selectedWorkerIdentity) : null}
+              workerName={selectedWorkerIdentity ? liveWorkerStreams.get(selectedWorkerIdentity)?.participant?.name : null}
+              selectedWorkerIdentity={selectedWorkerIdentity}
+              onSubmitFrames={handleSubmitFrames}
+              onUpload={handleSiteWorldUpload}
+              onReset={() => { setWorldJob(null); setWorldPolling(false) }}
+            />
           </>
         )}
       </div>
@@ -325,7 +725,7 @@ export default function LiveMode() {
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           marginBottom: 14,
         }}>
-          {[['all', `All · ${siteWorkers.length}`], ['teams', 'Teams']].map(([id, label]) => {
+          {[['all', 'All'], ['teams', 'Teams']].map(([id, label]) => {
             const active = tab === id
             return (
               <button
@@ -392,6 +792,8 @@ export default function LiveMode() {
                   videoTrack={stream.videoTrack}
                   selected={selectedWorkerIdentity === identity}
                   onClick={() => setSelectedWorkerIdentity(identity)}
+                  noteCount={feedNoteCounts[feedIdForParticipant(stream.participant)] || 0}
+                  noteSnippet={feedNoteSnippets[feedIdForParticipant(stream.participant)] || ''}
                 />
               ))}
             </div>

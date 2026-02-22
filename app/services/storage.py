@@ -6,7 +6,8 @@ from app.models.site import Site, Zone, ZoneStatus
 from app.models.alert import Alert, AlertSeverity
 from app.models.video import VideoJob, FrameData, VideoProcessingResult
 from app.models.analysis import SafetyReport, ProductivityReport
-from app.models.streaming import FeedConfig
+from app.models.streaming import FeedConfig, FeedNote, SiteWorld
+from app.models.embedding import EmbeddedObject
 
 now = datetime.now(timezone.utc)
 
@@ -98,3 +99,9 @@ VIDEO_RESULTS: dict[str, VideoProcessingResult] = {
 FRAMES: dict[str, list[FrameData]] = {}  # site_id -> frames
 SAFETY_REPORTS: dict[str, SafetyReport] = {}  # site_id -> latest
 PRODUCTIVITY_REPORTS: dict[str, ProductivityReport] = {}  # site_id -> latest
+
+NOTES: dict[str, list[FeedNote]] = {}  # worker_identity -> list of notes
+
+WORLDS: dict[str, SiteWorld] = {}  # operation_id -> SiteWorld
+
+EMBEDDINGS: dict[str, EmbeddedObject] = {}  # id -> EmbeddedObject

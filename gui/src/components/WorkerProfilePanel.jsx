@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchWorkerHistory } from '../api/teams'
+import { fetchWorkerNotes } from '../api/streaming'
+import { fetchWorkerEmbeddings } from '../api/embeddings'
 import { MOCK_WORKER_HISTORY } from '../utils/mockData'
 
 const TRADE_COLORS = {
@@ -43,6 +45,8 @@ function synthNeutral(worker) {
 export default function WorkerProfilePanel({ worker, siteId, onClose }) {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
+  const [notes, setNotes]     = useState([])
+  const [embeds, setEmbeds]   = useState([])
 
   const handleKey = useCallback((e) => { if (e.key === 'Escape') onClose() }, [onClose])
 
@@ -66,6 +70,12 @@ export default function WorkerProfilePanel({ worker, siteId, onClose }) {
         setData(MOCK_WORKER_HISTORY[worker.id] || synthNeutral(worker))
         setLoading(false)
       })
+    fetchWorkerNotes(worker.id, siteId)
+      .then(setNotes)
+      .catch(() => setNotes([]))
+    fetchWorkerEmbeddings(worker.id)
+      .then(setEmbeds)
+      .catch(() => setEmbeds([]))
   }, [worker?.id, siteId])
 
   const tradeColor = TRADE_COLORS[worker.trade] || { bg: 'rgba(255,255,255,0.08)', text: '#94a3b8' }
@@ -212,6 +222,44 @@ export default function WorkerProfilePanel({ worker, siteId, onClose }) {
                   {data.history.map((h, i) => <HistoryRow key={h.date} day={h} isToday={i === 0} />)}
                 </div>
               </div>
+
+              {/* Field notes */}
+              <div style={{ marginTop: 24 }}>
+                <SectionLabel>Field Notes {notes.length > 0 && `· ${notes.length}`}</SectionLabel>
+                {notes.length === 0 ? (
+                  <div style={{
+                    padding: '14px 16px', borderRadius: 10,
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px dashed rgba(255,255,255,0.06)',
+                    fontSize: 13, color: '#334155', fontStyle: 'italic',
+                  }}>
+                    No notes recorded
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {notes.map(n => <NoteItem key={n.id} note={n} />)}
+                  </div>
+                )}
+              </div>
+
+              {/* Embedded objects */}
+              <div style={{ marginTop: 24 }}>
+                <SectionLabel>Embedded Objects {embeds.length > 0 && `· ${embeds.length}`}</SectionLabel>
+                {embeds.length === 0 ? (
+                  <div style={{
+                    padding: '14px 16px', borderRadius: 10,
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px dashed rgba(255,255,255,0.06)',
+                    fontSize: 13, color: '#334155', fontStyle: 'italic',
+                  }}>
+                    No embedded objects — use Inspect Frame in LiveMode
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {embeds.map(obj => <EmbedItem key={obj.id} obj={obj} />)}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -261,6 +309,92 @@ function AlertPill({ alert }) {
       <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.4 }}>
         <span style={{ color, fontWeight: 600 }}>{alert.severity} · </span>
         {alert.title}
+      </div>
+    </div>
+  )
+}
+
+function noteTime(isoStr) {
+  const d = new Date(isoStr)
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  return isToday
+    ? time
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + '  ' + time
+}
+
+function NoteItem({ note }) {
+  return (
+    <div style={{
+      padding: '10px 0',
+      borderBottom: '1px solid rgba(255,255,255,0.04)',
+    }}>
+      <div style={{
+        fontSize: 10, fontFamily: 'var(--mono)', color: '#334155',
+        marginBottom: 4,
+      }}>
+        {noteTime(note.created_at)}
+      </div>
+      <p style={{ margin: 0, fontSize: 12, color: '#94a3b8', lineHeight: 1.55 }}>
+        {note.transcript || <em style={{ color: '#334155' }}>No transcript</em>}
+      </p>
+    </div>
+  )
+}
+
+function embedTime(isoStr) {
+  const d = new Date(isoStr)
+  const now = new Date()
+  const diffMs = now - d
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHrs = Math.floor(diffMin / 60)
+  if (diffHrs < 24) return `${diffHrs}h ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function EmbedItem({ obj }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      padding: '10px 12px', borderRadius: 10,
+      background: 'rgba(249,115,22,0.04)',
+      border: '1px solid rgba(249,115,22,0.12)',
+    }}>
+      {/* Thumbnail */}
+      {obj.crop_b64 && (
+        <img
+          src={`data:image/jpeg;base64,${obj.crop_b64}`}
+          alt={obj.label}
+          style={{
+            width: 48, height: 48, borderRadius: 6, objectFit: 'cover',
+            flexShrink: 0, border: '1px solid rgba(249,115,22,0.2)',
+          }}
+        />
+      )}
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, fontFamily: 'var(--mono)',
+            color: '#FDBA74', textTransform: 'uppercase', letterSpacing: '0.04em',
+          }}>
+            {obj.label}
+          </span>
+          <span style={{ fontSize: 10, color: '#334155', fontFamily: 'var(--mono)' }}>
+            · {embedTime(obj.created_at)}
+          </span>
+        </div>
+        <p style={{
+          margin: 0, fontSize: 12, color: '#94a3b8', lineHeight: 1.5,
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        }}>
+          {obj.note === '[no note]'
+            ? <em style={{ color: '#334155' }}>No note</em>
+            : obj.note}
+        </p>
       </div>
     </div>
   )

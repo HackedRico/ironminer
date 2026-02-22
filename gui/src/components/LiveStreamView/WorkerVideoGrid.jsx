@@ -9,7 +9,7 @@ import WorkerVideoTile from './WorkerVideoTile'
  *   1 worker  → full width
  *   2+ workers → 2-column grid
  */
-export default function WorkerVideoGrid({ workerStreams, selectedIdentity, onSelectWorker }) {
+export default function WorkerVideoGrid({ workerStreams, selectedIdentity, onSelectWorker, videoRef }) {
   const entries = Array.from(workerStreams.entries())
   const count = entries.length
 
@@ -40,6 +40,7 @@ export default function WorkerVideoGrid({ workerStreams, selectedIdentity, onSel
       {entries.map(([identity, stream]) => (
         <WorkerVideoTile
           key={identity}
+          ref={identity === selectedIdentity ? videoRef : null}
           identity={identity}
           participant={stream.participant}
           videoTrack={stream.videoTrack}

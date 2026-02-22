@@ -4,7 +4,15 @@ import { useRef, useEffect } from 'react'
  * LiveWorkerFeedCard — small card for the sidebar showing a live worker's video thumbnail.
  * Clicking selects that worker in the main view.
  */
-export default function LiveWorkerFeedCard({ identity, participant, videoTrack, selected, onClick }) {
+export default function LiveWorkerFeedCard({
+  identity,
+  participant,
+  videoTrack,
+  selected,
+  onClick,
+  noteCount = 0,
+  noteSnippet = '',
+}) {
   const videoRef = useRef(null)
 
   useEffect(() => {
@@ -63,6 +71,27 @@ export default function LiveWorkerFeedCard({ identity, participant, videoTrack, 
         <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#22C55E' }} />
         <span style={{ fontSize: 8, fontWeight: 700, color: '#86EFAC', fontFamily: 'var(--mono)' }}>LIVE</span>
       </div>
+      {noteCount > 0 && (
+        <div style={{
+          position: 'absolute', top: 6, right: 6,
+          display: 'flex', alignItems: 'center', gap: 4,
+          background: 'rgba(0,0,0,0.75)', padding: '2px 6px', borderRadius: 4,
+        }}>
+          <span style={{ fontSize: 8, fontWeight: 700, color: '#FDBA74', fontFamily: 'var(--mono)' }}>
+            {noteCount} NOTE{noteCount === 1 ? '' : 'S'}
+          </span>
+        </div>
+      )}
+      {noteSnippet && (
+        <div style={{
+          position: 'absolute', left: 6, right: 6, bottom: 24,
+          background: 'rgba(0,0,0,0.75)', padding: '4px 6px', borderRadius: 6,
+          color: '#FDE68A', fontSize: 9, lineHeight: 1.3,
+          maxHeight: 28, overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {noteSnippet}
+        </div>
+      )}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         padding: '6px 8px',

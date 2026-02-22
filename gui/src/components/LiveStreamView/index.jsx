@@ -1,8 +1,10 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import FrameInspector from './FrameInspector'
 import { ConnectionState } from 'livekit-client'
 import { C } from '../../utils/colors'
 import useLiveStream from '../../hooks/useLiveStream'
 import useAudioControls from '../../hooks/useAudioControls'
+import { createFeedNote } from '../../api/streaming'
 import WorkerVideoGrid from './WorkerVideoGrid'
 import ConnectionStatus from './ConnectionStatus'
 import WorkerSelector from './WorkerSelector'
@@ -48,6 +50,20 @@ const iconFlag = (
     <line x1="4" y1="22" x2="4" y2="15" />
   </svg>
 )
+const iconInspect = (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+  </svg>
+)
+const iconNote = (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7a2 2 0 0 1 2-2h9l5 5v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+    <path d="M14 5v5h5" />
+    <line x1="7" y1="13" x2="15" y2="13" />
+    <line x1="7" y1="16" x2="12" y2="16" />
+  </svg>
+)
 
 function iconBtnStyle(active, danger = false) {
   return {
@@ -78,8 +94,17 @@ export default function LiveStreamView({
   onWorkerStreamsChange,
   selectedWorkerIdentity: controlledSelectedWorker,
   onSelectWorker,
+  onNoteSaved,
 }) {
   const [internalSelectedWorker, setInternalSelectedWorker] = useState(null)
+  const [noteState, setNoteState] = useState('idle') // idle | recording | saving | saved | error
+  const [noteMessage, setNoteMessage] = useState('')
+  const [inspectorFrame, setInspectorFrame] = useState(null) // null = closed, data URI = open
+  const recorderRef = useRef(null)
+  const streamRef = useRef(null)
+  const audioChunksRef = useRef([])
+  const idleTimerRef = useRef(null)
+  const activeVideoRef = useRef(null) // ref to the currently-displayed worker's <video> element
 
   const roomName = site ? `site-${site.id}` : null
   const { connect, disconnect, workerStreams, isConnected, connectionState, room, error } =
@@ -99,12 +124,146 @@ export default function LiveStreamView({
     if (typeof onWorkerStreamsChange === 'function') onWorkerStreamsChange(workerStreams)
   }, [workerStreams, onWorkerStreamsChange])
 
+  // Auto-select the only worker stream if nothing is selected yet
+  useEffect(() => {
+    if (selectedWorkerIdentity) return
+    if (workerStreams.size === 1) {
+      const onlyId = Array.from(workerStreams.keys())[0]
+      handleSelectWorker(onlyId)
+    }
+  }, [workerStreams, selectedWorkerIdentity, handleSelectWorker])
+
   // Auto-connect when we have a site so sidebar shows live thumbnails before user clicks Connect
   useEffect(() => {
     if (roomName && connectionState === ConnectionState.Disconnected) connect()
   }, [roomName, connectionState])
 
+  // Cleanup recorder + stream on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(idleTimerRef.current)
+      try { recorderRef.current?.stop() } catch {}
+      try { streamRef.current?.getTracks().forEach(t => t.stop()) } catch {}
+    }
+  }, [])
+
   const selectedStream = selectedWorkerIdentity ? workerStreams.get(selectedWorkerIdentity) : null
+  const canSaveNote = !!selectedFeed?.id && !!site?.id && !!selectedWorkerIdentity
+
+
+  const startNoteRecording = useCallback(async () => {
+    if (noteState === 'recording' || noteState === 'saving') return
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      setNoteState('error')
+      setNoteMessage('Audio recording not supported in this browser')
+      return
+    }
+    if (!canSaveNote) {
+      setNoteState('error')
+      setNoteMessage('Select a worker feed first')
+      return
+    }
+
+    // Clear any pending idle reset from a previous save
+    clearTimeout(idleTimerRef.current)
+
+    // Tear down any leftover recorder/stream from a previous session
+    try { recorderRef.current?.stop() } catch {}
+    try { streamRef.current?.getTracks().forEach(t => t.stop()) } catch {}
+    recorderRef.current = null
+    streamRef.current = null
+
+    setNoteMessage('')
+    audioChunksRef.current = []
+
+    try {
+      // Disable browser audio processing so it doesn't conflict with LiveKit's mic pipeline
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      })
+      streamRef.current = stream
+      const recorder = new MediaRecorder(stream)
+      recorderRef.current = recorder
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      recorder.onerror = (e) => {
+        setNoteState('error')
+        setNoteMessage(`Recording error: ${e.error?.message || 'unknown'}`)
+        try { streamRef.current?.getTracks().forEach(t => t.stop()) } catch {}
+        streamRef.current = null
+        recorderRef.current = null
+      }
+
+      recorder.onstop = async () => {
+        setNoteState('saving')
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+          const base64 = await new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+              const res = reader.result || ''
+              const b64 = typeof res === 'string' ? res.split(',')[1] : ''
+              resolve(b64)
+            }
+            reader.readAsDataURL(blob)
+          })
+
+          await createFeedNote(selectedFeed.id, {
+            feed_id: selectedFeed.id,
+            site_id: site.id,
+            worker_identity: selectedWorkerIdentity,
+            transcript: null,
+            audio_base64: base64 || null,
+          })
+          if (typeof onNoteSaved === 'function') onNoteSaved(selectedFeed.id, '')
+          setNoteState('saved')
+          setNoteMessage('Note saved')
+          idleTimerRef.current = setTimeout(() => setNoteState('idle'), 1500)
+        } catch (err) {
+          setNoteState('error')
+          setNoteMessage(err.message || 'Failed to save note')
+        } finally {
+          try { streamRef.current?.getTracks().forEach(t => t.stop()) } catch {}
+          streamRef.current = null
+          recorderRef.current = null
+        }
+      }
+
+      recorder.start(250)
+      setNoteState('recording')
+    } catch (err) {
+      setNoteState('error')
+      setNoteMessage(err.message || 'Mic access failed')
+    }
+  }, [noteState, canSaveNote, selectedFeed, selectedWorkerIdentity, site])
+
+  const stopNoteRecording = useCallback(() => {
+    if (noteState !== 'recording') return
+    try { recorderRef.current?.stop() } catch {}
+  }, [noteState])
+
+  const toggleNoteRecording = useCallback(() => {
+    if (noteState === 'recording') stopNoteRecording()
+    else startNoteRecording()
+  }, [noteState, startNoteRecording, stopNoteRecording])
+
+  // ── Frame inspection: capture current video frame → open FrameInspector ──
+  const handleInspect = useCallback(() => {
+    const v = activeVideoRef.current
+    if (!v || !v.videoWidth) return
+    const canvas = document.createElement('canvas')
+    canvas.width = v.videoWidth
+    canvas.height = v.videoHeight
+    canvas.getContext('2d').drawImage(v, 0, 0)
+    setInspectorFrame(canvas.toDataURL('image/jpeg', 0.85))
+  }, [])
 
   return (
     <div>
@@ -151,6 +310,7 @@ export default function LiveStreamView({
               workerStreams={new Map([[selectedWorkerIdentity, selectedStream]])}
               selectedIdentity={selectedWorkerIdentity}
               onSelectWorker={handleSelectWorker}
+              videoRef={activeVideoRef}
             />
           ) : workerStreams.size === 0 ? (
             <div style={{
@@ -228,8 +388,29 @@ export default function LiveStreamView({
             >
               {isMicEnabled ? iconMic : iconMicOff}
             </button>
-            <button title="Snapshot" style={iconBtnStyle(false)}>
-              {iconSnapshot}
+            <button
+              onClick={toggleNoteRecording}
+              title={canSaveNote ? (noteState === 'recording' ? 'Stop and save note' : 'Start recording note') : 'Select a worker feed first'}
+              style={{
+                ...iconBtnStyle(noteState === 'recording'),
+                color: noteState === 'recording' ? C.orangeLight : C.subtle,
+                opacity: canSaveNote ? 1 : 0.5,
+                cursor: canSaveNote ? 'pointer' : 'not-allowed',
+              }}
+            >
+              {iconNote}
+            </button>
+            <button
+              onClick={handleInspect}
+              title={selectedStream ? 'Inspect frame — embed object with note' : 'Select a worker stream first'}
+              disabled={!selectedStream}
+              style={{
+                ...iconBtnStyle(false),
+                opacity: selectedStream ? 1 : 0.4,
+                cursor: selectedStream ? 'pointer' : 'not-allowed',
+              }}
+            >
+              {iconInspect}
             </button>
             <button title="Flag issue" style={iconBtnStyle(false, true)}>
               {iconFlag}
@@ -237,6 +418,17 @@ export default function LiveStreamView({
           </>
         )}
       </div>
+
+      {noteState !== 'idle' && (
+        <div style={{
+          padding: '8px 12px', borderRadius: 8, marginBottom: 12,
+          background: noteState === 'error' ? 'rgba(239,68,68,0.08)' : 'rgba(249,115,22,0.08)',
+          border: noteState === 'error' ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(249,115,22,0.2)',
+          fontSize: 12, color: noteState === 'error' ? '#FCA5A5' : '#FDBA74',
+        }}>
+          {noteMessage || (noteState === 'recording' ? 'Recording… Parakeet will transcribe on save' : 'Saving note…')}
+        </div>
+      )}
 
       {/* Error message */}
       {error && (
@@ -283,6 +475,24 @@ export default function LiveStreamView({
             onSelectWorker={handleSelectWorker}
           />
         </div>
+      )}
+
+      {/* ── Frame Inspector modal ─────────────────────────────────────────── */}
+      {inspectorFrame && (
+        <FrameInspector
+          frame={inspectorFrame}
+          feedId={selectedFeed?.id || 'unknown'}
+          siteId={site?.id || 'unknown'}
+          workerIdentity={selectedWorkerIdentity}
+          onClose={() => setInspectorFrame(null)}
+          onSaved={(obj) => {
+            setInspectorFrame(null)
+            // Surface a note count bump so the sidebar badge updates
+            if (typeof onNoteSaved === 'function') {
+              onNoteSaved(selectedFeed?.id || 'unknown', `[embedded: ${obj.label}]`)
+            }
+          }}
+        />
       )}
     </div>
   )

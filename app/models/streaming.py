@@ -38,6 +38,56 @@ class AutoScanRequest(BaseModel):
     interval_seconds: int = 30
 
 
+# --- Feed notes ---
+
+class FeedNoteCreate(BaseModel):
+    feed_id: str
+    site_id: str
+    worker_identity: Optional[str] = None
+    transcript: str | None = None
+    audio_base64: Optional[str] = None
+
+
+class FeedNote(BaseModel):
+    id: str
+    feed_id: str
+    site_id: str
+    worker_identity: Optional[str] = None
+    transcript: str
+    audio_base64: Optional[str] = None
+    created_at: datetime
+
+
+# --- 3D World generation (World Labs) ---
+
+class WorldGenerateRequest(BaseModel):
+    site_id: str
+    worker_identity: Optional[str] = None
+    input_type: str = "image"          # image | video | text
+    image_base64: Optional[str] = None
+    text_prompt: Optional[str] = None
+    display_name: Optional[str] = None
+
+class FramesWorldRequest(BaseModel):
+    site_id: str
+    frames_base64: list[str]           # 2-8 JPEG frames captured from live stream
+    worker_identity: Optional[str] = None
+    display_name: str = "Site 3D Scan"
+
+class SiteWorld(BaseModel):
+    id: str
+    site_id: str
+    worker_identity: Optional[str] = None
+    operation_id: str
+    status: str = "generating"         # generating | done | error
+    progress: str = ""
+    world_id: Optional[str] = None
+    marble_url: Optional[str] = None
+    worldvr_url: Optional[str] = None
+    error: Optional[str] = None
+    created_at: datetime
+
+
 # ── LiveKit models ─────────────────────────────────────────────────────────────
 
 class TokenRequest(BaseModel):

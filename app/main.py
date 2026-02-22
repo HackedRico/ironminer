@@ -13,6 +13,7 @@ from app.routers import (
     streaming,
     workers,
     teams,
+    embeddings,
 )
 
 from app.services.team_service import initialize as initialize_teams
@@ -44,6 +45,7 @@ app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
 app.include_router(streaming.router, prefix="/api/streaming", tags=["Live Streaming"])
 app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])
 app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
+app.include_router(embeddings.router, prefix="/api/embeddings", tags=["Embeddings"])
 
 
 @app.get("/")

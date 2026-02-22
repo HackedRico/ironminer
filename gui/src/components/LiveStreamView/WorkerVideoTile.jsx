@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, forwardRef } from 'react'
 import { C } from '../../utils/colors'
 
 /**
@@ -6,16 +6,20 @@ import { C } from '../../utils/colors'
  *
  * Imperatively attaches a LiveKit VideoTrack to a <video> element via useRef.
  * Audio is routed through a separate hidden <audio> element.
+ *
+ * Accepts a forwarded ref — when provided, the parent can access the underlying
+ * <video> element directly (e.g. to capture a frame snapshot via canvas.drawImage).
  */
-export default function WorkerVideoTile({
+const WorkerVideoTile = forwardRef(function WorkerVideoTile({
   identity,
   participant,
   videoTrack,
   audioTrack,
   isSelected,
   onClick,
-}) {
-  const videoRef = useRef(null)
+}, forwardedRef) {
+  const internalRef = useRef(null)
+  const videoRef = forwardedRef || internalRef
   const audioRef = useRef(null)
 
   // Attach/detach video track imperatively — never use track.attach() without
@@ -128,4 +132,6 @@ export default function WorkerVideoTile({
       </div>
     </div>
   )
-}
+})
+
+export default WorkerVideoTile

@@ -13,7 +13,9 @@
       "Bash(cd /c/Users/chukw/Desktop/Programming/ironminer && python -c \"\nfrom app.services.team_service import initialize\ninitialize\\(\\)\n\nfrom app.services import team_service\nworkers = team_service.get_site_workers\\('s1'\\)\nprint\\(f'Workers loaded: {len\\(workers\\)} for s1'\\)\n\nfrom pathlib import Path\nwf = Path\\('data/workers.json'\\)\ntf = Path\\('data/teams.json'\\)\nprint\\(f'workers.json exists: {wf.exists\\(\\)} \\({wf.stat\\(\\).st_size} bytes\\)'\\)\nprint\\(f'teams.json exists:   {tf.exists\\(\\)} \\({tf.stat\\(\\).st_size} bytes\\)'\\)\n\" 2>&1)",
       "Bash(cd:*)",
       "Bash(.venv/Scripts/python:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cd /c/Users/chukw/Desktop/Programming/ironminer && python -c \"from app.routers.streaming import router; print\\('OK'\\)\" 2>&1)",
+      "Bash(python:*)"
     ]
   }
 }
