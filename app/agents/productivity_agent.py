@@ -1,7 +1,9 @@
-"""Productivity Agent — congestion scoring, trade overlap, resource allocation.
+"""Productivity Agent — deterministic congestion/overlap + LLM summary.
 
-Input: VideoProcessingResult (structured zone data from Video Agent)
-Output: ProductivityReport
+Phase 1: From VideoProcessingResult.zones and trade_proximities, compute
+         trade_overlaps, zone congestion, and congestion_trend. No LLM.
+Phase 2: Send narrative (summary_text / zone_analyses) + Phase 1 outputs to LLM
+         for executive summary and resource_suggestions.
 """
 from __future__ import annotations
 
@@ -17,263 +19,197 @@ from app.services.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
-# ── LLM summary prompt (Phase 2 — narration only) ────────────────────────────
+PRODUCTIVITY_SYSTEM_PROMPT = """\
+You are a construction productivity analyst. You receive:
+1. A narrative summary of the video (e.g. from summary.txt).
+2. Deterministic productivity data: trade overlaps (multiple trades in same zone), congestion trend.
 
-SUMMARY_SYSTEM_PROMPT = """\
-You are a construction productivity analyst writing executive briefings for \
-site superintendents. You will receive JSON data with zone congestion scores \
-and trade overlap information. Write a concise 2-paragraph field briefing:
-
-Paragraph 1: Overall site productivity status — which zones are congested, \
-how many trades are overlapping, and the congestion trend (improving/stable/worsening).
-
-Paragraph 2: Top 2-3 actionable recommendations to reduce congestion and \
-improve workflow. Be specific about which trades to reschedule or relocate.
-
-Tone: direct, practical, no jargon. A site super should read this in 30 seconds.
+Your job — write a short executive summary for the site manager:
+- Paragraph 1: Overall congestion and coordination. Which zones have the most overlap or conflict.
+- Paragraph 2: Top 1–3 resource or scheduling recommendations (stagger trades, clear corridors, reallocate crew).
+- Keep it under 150 words. Direct, actionable.
 
 Respond with ONLY valid JSON (no markdown):
 {
-  "summary": "<2-paragraph briefing>"
+  "summary": "<2-paragraph executive summary>",
+  "resource_suggestions": ["<suggestion 1>", "<suggestion 2>", ...]
 }
 """
 
 
-# ── Zone congestion scoring ──────────────────────────────────────────────────
-
-def _score_congestion(zone: ZoneAnalysis) -> int:
-    """Compute congestion score 1-5 from worker density and trade count."""
-    worker_count = len(zone.workers)
-    trade_count = len(zone.trades_present)
-    area = zone.area_sqft or 1000  # default if unknown
-
-    density = worker_count / (area / 100)  # workers per 100 sqft
-
-    if density >= 3.0 or (trade_count >= 3 and worker_count >= 8):
-        return 5
-    if density >= 2.0 or (trade_count >= 3 and worker_count >= 5):
-        return 4
-    if density >= 1.0 or trade_count >= 2:
-        return 3
-    if density >= 0.5 or worker_count >= 3:
-        return 2
-    return 1
+def _get_summary_text(result: VideoProcessingResult) -> str:
+    """Narrative from summary.txt; video agent stores it in metadata combined_briefing or summary_text."""
+    if getattr(result, "summary_text", None):
+        return (result.summary_text or "").strip()
+    if result.metadata:
+        for key in ("summary_text", "combined_briefing"):
+            val = result.metadata.get(key)
+            if val:
+                return str(val).strip()
+    return ""
 
 
-def _congestion_to_status(score: int) -> ZoneStatus:
-    if score >= 4:
-        return ZoneStatus.critical
-    if score >= 3:
-        return ZoneStatus.warning
-    return ZoneStatus.ok
+def _run_phase1(result: VideoProcessingResult) -> tuple[list[TradeOverlap], list[Zone], str]:
+    """From zones and trade_proximities build trade_overlaps, report zones, and congestion_trend."""
+    trade_overlaps: list[TradeOverlap] = []
+    report_zones: list[Zone] = []
+    trend_inputs: list[str] = []
 
-
-def _build_zones(result: VideoProcessingResult) -> list[Zone]:
-    """Build Zone objects with congestion scores from structured zone data."""
-    zones: list[Zone] = []
-    for za in result.zones:
-        score = _score_congestion(za)
-        zones.append(Zone(
-            zone=za.zone_name,
-            congestion=score,
-            trades=za.trades_present,
-            workers=len(za.workers),
-            status=_congestion_to_status(score),
-        ))
-    return zones
-
-
-# ── Trade overlap detection ──────────────────────────────────────────────────
-
-def _detect_trade_overlaps(result: VideoProcessingResult) -> list[TradeOverlap]:
-    """Flag zones with 2+ trades sharing the same space."""
-    overlaps: list[TradeOverlap] = []
-    for za in result.zones:
-        if len(za.trades_present) < 2:
-            continue
-
-        trade_count = len(za.trades_present)
-        area = za.area_sqft or 1000
-
-        if trade_count >= 3 and area < 500:
-            severity = "severe"
-        elif trade_count >= 3 or area < 500:
-            severity = "moderate"
+    for z in result.zones:
+        # Map ZoneAnalysis → Zone for report (congestion 1–5 from area/workers)
+        workers = len(z.workers)
+        area = z.area_sqft or 500.0
+        if area > 0 and workers > 0:
+            density = workers / (area / 100.0)  # workers per 100 sqft
+            if density >= 2.0:
+                congestion = 5
+                status = ZoneStatus.critical
+                trend_inputs.append("worsening")
+            elif density >= 1.0:
+                congestion = 4
+                status = ZoneStatus.critical
+                trend_inputs.append("worsening")
+            elif density >= 0.5:
+                congestion = 3
+                status = ZoneStatus.warning
+                trend_inputs.append("stable")
+            else:
+                congestion = 2
+                status = ZoneStatus.ok
+                trend_inputs.append("improving")
         else:
-            severity = "minor"
-
-        if severity == "severe":
-            rec = (
-                f"Stagger {za.trades_present[0]} to alternate shift. "
-                f"{trade_count} trades in {int(area)} sqft is unsafe."
+            congestion = 1
+            status = ZoneStatus.ok
+        report_zones.append(
+            Zone(
+                zone=z.zone_name,
+                congestion=congestion,
+                trades=z.trades_present.copy(),
+                workers=workers,
+                status=status,
             )
-        elif severity == "moderate":
-            rec = (
-                f"Consider relocating {za.trades_present[-1]} to reduce "
-                f"overlap in {za.zone_name}."
+        )
+        # Trade overlap: 2+ trades in same zone
+        if len(z.trades_present) >= 2:
+            area_sqft = z.area_sqft or 400.0
+            if area_sqft < 500 and len(z.trades_present) >= 3:
+                severity = "severe"
+                rec = "Stagger trades or expand work area to reduce coordination risk."
+            elif area_sqft < 800:
+                severity = "moderate"
+                rec = "Monitor for conflicts; consider dedicated handoff times."
+            else:
+                severity = "minor"
+                rec = "Multiple trades present; ensure clear lanes."
+            trade_overlaps.append(
+                TradeOverlap(
+                    zone=z.zone_name,
+                    trades=z.trades_present.copy(),
+                    severity=severity,
+                    recommendation=rec,
+                )
             )
-        else:
-            rec = f"Monitor overlap of {', '.join(za.trades_present)} in {za.zone_name}."
 
-        overlaps.append(TradeOverlap(
-            zone=za.zone_name,
-            trades=za.trades_present,
-            severity=severity,
-            recommendation=rec,
-        ))
-    return overlaps
+    # Trade proximities from result (overhead work, separation)
+    for tp in result.trade_proximities:
+        zone_name = next((z.zone_name for z in result.zones if z.zone_id == tp.zone_id), tp.zone_id)
+        trade_overlaps.append(
+            TradeOverlap(
+                zone=zone_name,
+                trades=[tp.trade_a, tp.trade_b],
+                severity="severe" if tp.overhead_work_above_crew and tp.separation_ft < 10 else "moderate",
+                recommendation=tp.description or "Maintain separation; avoid overhead work above other crews.",
+            )
+        )
+
+    if not trend_inputs:
+        congestion_trend = "stable"
+    elif trend_inputs.count("worsening") >= 2:
+        congestion_trend = "worsening"
+    elif trend_inputs.count("improving") >= len(trend_inputs) / 2:
+        congestion_trend = "improving"
+    else:
+        congestion_trend = "stable"
+
+    return trade_overlaps, report_zones, congestion_trend
 
 
-# ── Congestion trend ─────────────────────────────────────────────────────────
-
-def _compute_trend(
-    current_zones: list[Zone],
-    previous_report: ProductivityReport | None,
+def _build_productivity_prompt(
+    result: VideoProcessingResult,
+    trade_overlaps: list[TradeOverlap],
+    congestion_trend: str,
 ) -> str:
-    """Compare current congestion against previous report."""
-    if not previous_report or not previous_report.zones:
-        return "stable"
-
-    prev_avg = sum(z.congestion for z in previous_report.zones) / len(previous_report.zones)
-    curr_avg = sum(z.congestion for z in current_zones) / len(current_zones) if current_zones else 0
-
-    diff = curr_avg - prev_avg
-    if diff <= -0.5:
-        return "improving"
-    if diff >= 0.5:
-        return "worsening"
-    return "stable"
-
-
-# ── Resource suggestions ─────────────────────────────────────────────────────
-
-def _generate_suggestions(
-    zones: list[Zone],
-    overlaps: list[TradeOverlap],
-    trend: str,
-) -> list[str]:
-    """Deterministic recommendations based on congestion and overlaps."""
-    suggestions: list[str] = []
-
-    critical_zones = [z for z in zones if z.status == ZoneStatus.critical]
-    for z in critical_zones:
-        suggestions.append(
-            f"Reduce headcount in {z.zone} (congestion {z.congestion}/5, "
-            f"{z.workers} workers). Consider splitting across shifts."
-        )
-
-    severe_overlaps = [o for o in overlaps if o.severity == "severe"]
-    for o in severe_overlaps:
-        suggestions.append(
-            f"Urgent: {len(o.trades)} trades in {o.zone} — {o.recommendation}"
-        )
-
-    if trend == "worsening":
-        suggestions.append(
-            "Congestion trend is worsening. Review scheduling across all zones."
-        )
-
-    if not suggestions:
-        suggestions.append("No immediate action required. Site productivity is within normal parameters.")
-
-    return suggestions
+    summary_text = _get_summary_text(result)
+    payload = {
+        "narrative_from_video": summary_text or "(no narrative)",
+        "congestion_trend": congestion_trend,
+        "trade_overlaps": [
+            {"zone": o.zone, "trades": o.trades, "severity": o.severity, "recommendation": o.recommendation}
+            for o in trade_overlaps
+        ],
+    }
+    if result.temporal_chain:
+        payload["temporal_notes"] = result.temporal_chain[:10]
+    return json.dumps(payload, indent=2)
 
 
-# ── LLM summary ──────────────────────────────────────────────────────────────
-
-def _build_summary_prompt(
-    zones: list[Zone],
-    overlaps: list[TradeOverlap],
-    trend: str,
-) -> str:
-    zone_data = [
-        {
-            "zone": z.zone,
-            "congestion": z.congestion,
-            "trades": z.trades,
-            "workers": z.workers,
-            "status": z.status.value,
-        }
-        for z in zones
-    ]
-    overlap_data = [
-        {
-            "zone": o.zone,
-            "trades": o.trades,
-            "severity": o.severity,
-            "recommendation": o.recommendation,
-        }
-        for o in overlaps
-    ]
-    return json.dumps(
-        {"zones": zone_data, "trade_overlaps": overlap_data, "congestion_trend": trend},
-        indent=2,
-    )
-
-
-def _parse_summary_response(raw: str) -> str:
+def _parse_productivity_response(raw: str) -> tuple[str, list[str]]:
     cleaned = raw.strip()
     if cleaned.startswith("```"):
-        lines = cleaned.split("\n")
-        lines = lines[1:]
+        lines = cleaned.split("\n")[1:]
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         cleaned = "\n".join(lines)
-
     try:
         data = json.loads(cleaned)
-        return data.get("summary", "")
+        summary = data.get("summary", "")
+        suggestions = data.get("resource_suggestions", [])
+        if isinstance(suggestions, list):
+            suggestions = [str(s) for s in suggestions if s]
+        return summary, suggestions
     except json.JSONDecodeError:
-        logger.warning("LLM returned non-JSON summary, using raw text")
-        return raw.strip()
-
-
-# ── Agent class ──────────────────────────────────────────────────────────────
+        logger.warning("ProductivityAgent: LLM returned non-JSON, using raw as summary")
+        return raw.strip(), []
 
 
 class ProductivityAgent(BaseAgent):
-    async def process(
-        self, site_id: str, video_result: VideoProcessingResult
-    ) -> ProductivityReport:
-        # Get previous report for trend comparison
-        from app.services.storage import PRODUCTIVITY_REPORTS
-        previous = PRODUCTIVITY_REPORTS.get(site_id)
-
-        # Phase 1 — deterministic analysis (no LLM)
-        zones = _build_zones(video_result)
-        overlaps = _detect_trade_overlaps(video_result)
-        trend = _compute_trend(zones, previous)
-        suggestions = _generate_suggestions(zones, overlaps, trend)
-
+    async def process(self, site_id: str, video_result: VideoProcessingResult) -> ProductivityReport:
+        # Phase 1 — deterministic
+        trade_overlaps, zones, congestion_trend = _run_phase1(video_result)
         logger.info(
-            "ProductivityAgent Phase 1: %d zones, %d overlaps, trend=%s",
-            len(zones), len(overlaps), trend,
+            "ProductivityAgent Phase 1: %d overlaps, %d zones, trend=%s",
+            len(trade_overlaps),
+            len(zones),
+            congestion_trend,
         )
 
-        # Phase 2 — LLM for executive summary
+        # Phase 2 — LLM summary and suggestions
         summary = ""
+        resource_suggestions: list[str] = []
         try:
             llm = get_llm_client()
-            user_prompt = _build_summary_prompt(zones, overlaps, trend)
-            logger.info("ProductivityAgent Phase 2: sending %d chars to LLM", len(user_prompt))
-            raw_response = await llm.chat(system=SUMMARY_SYSTEM_PROMPT, user=user_prompt)
-            logger.info("ProductivityAgent Phase 2: received %d chars from LLM", len(raw_response))
-            summary = _parse_summary_response(raw_response)
+            user_prompt = _build_productivity_prompt(video_result, trade_overlaps, congestion_trend)
+            raw_response = await llm.chat(system=PRODUCTIVITY_SYSTEM_PROMPT, user=user_prompt)
+            summary, resource_suggestions = _parse_productivity_response(raw_response)
         except Exception:
-            logger.exception("LLM summary failed — deterministic analysis is still valid")
-            critical_count = sum(1 for z in zones if z.status == ZoneStatus.critical)
-            summary = (
-                f"[Auto-generated] {len(zones)} zones analyzed. "
-                f"{critical_count} critical, {len(overlaps)} trade overlaps. "
-                f"Congestion trend: {trend}."
-            )
+            logger.exception("ProductivityAgent Phase 2 LLM failed — using fallback")
+            summary_text = _get_summary_text(video_result)
+            if summary_text:
+                summary = summary_text[:1500] + ("..." if len(summary_text) > 1500 else "")
+            else:
+                summary = (
+                    f"Congestion trend: {congestion_trend}. "
+                    f"{len(trade_overlaps)} trade overlap(s) detected. See overlaps and zones for details."
+                )
+            if trade_overlaps:
+                resource_suggestions = [o.recommendation for o in trade_overlaps[:3]]
 
         return ProductivityReport(
             site_id=site_id,
             zones=zones,
-            trade_overlaps=overlaps,
-            congestion_trend=trend,
-            resource_suggestions=suggestions,
+            trade_overlaps=trade_overlaps,
+            congestion_trend=congestion_trend,
+            resource_suggestions=resource_suggestions,
             summary=summary,
             generated_at=datetime.now(timezone.utc),
         )

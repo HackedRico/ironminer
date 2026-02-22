@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from app.models.site import Site, Zone, ZoneStatus
 from app.models.alert import Alert, AlertSeverity
 from app.models.video import VideoJob, FrameData, VideoProcessingResult
-from app.models.analysis import SafetyReport, ProductivityReport
+from app.models.analysis import SafetyReport, ProductivityReport, TradeOverlap
 from app.models.streaming import FeedConfig
 
 now = datetime.now(timezone.utc)
@@ -97,4 +97,32 @@ VIDEO_RESULTS: dict[str, VideoProcessingResult] = {
 }
 FRAMES: dict[str, list[FrameData]] = {}  # site_id -> frames
 SAFETY_REPORTS: dict[str, SafetyReport] = {}  # site_id -> latest
-PRODUCTIVITY_REPORTS: dict[str, ProductivityReport] = {}  # site_id -> latest
+
+# Seed productivity report for s1 so GET /api/productivity/report/s1 returns 200
+PRODUCTIVITY_REPORTS: dict[str, ProductivityReport] = {
+    "s1": ProductivityReport(
+        site_id="s1",
+        zones=SITES["s1"].zones,
+        trade_overlaps=[
+            TradeOverlap(
+                zone="Zone B — Level 3 East Scaffolding",
+                trades=["Electrical", "Plumbing", "Framing"],
+                severity="severe",
+                recommendation="Stagger trades or expand work area to reduce coordination risk.",
+            ),
+            TradeOverlap(
+                zone="Zone E — Level 2 Interior",
+                trades=["HVAC", "Electrical"],
+                severity="moderate",
+                recommendation="Monitor for conflicts; consider dedicated handoff times.",
+            ),
+        ],
+        congestion_trend="worsening",
+        resource_suggestions=[
+            "Stagger electrical crew to afternoon shift in Zone B to reduce overlap with framing.",
+            "Clear conduit from corridors in Level 3 East to restore egress.",
+        ],
+        summary="Zone B (Level 3 East) has three trades in a confined area with high congestion. Zone E has moderate overlap. Overall trend is worsening; recommend staggering trades and clearing corridors.",
+        generated_at=now,
+    ),
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchProductivityReport } from '../api/productivity'
+import { runProductivityAnalysis, fetchProductivityReport } from '../api/productivity'
 import { connectPipeline } from '../api/streaming'
 
 const trendColor = {
@@ -33,13 +33,16 @@ function parseSummary(raw) {
   return text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
 }
 
-export default function ProductivityPanel({ siteId, hasFootage = true }) {
+export default function ProductivityPanel({ siteId, hasFootage = true, onAnalysisComplete }) {
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState(null)
   const [expandedZone, setExpandedZone] = useState(null)
   const [expandedOverlap, setExpandedOverlap] = useState(null)
 
   const loadReport = async () => {
+    if (!siteId) return
     try {
       const data = await fetchProductivityReport(siteId)
       setReport(data)
@@ -47,6 +50,21 @@ export default function ProductivityPanel({ siteId, hasFootage = true }) {
       setReport(null)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRun = async () => {
+    setRunning(true)
+    setError(null)
+    try {
+      await runProductivityAnalysis(siteId, 'mock_vj_001')
+      const data = await fetchProductivityReport(siteId)
+      setReport(data)
+      onAnalysisComplete?.(data)
+    } catch (err) {
+      setError(err?.message || 'Productivity analysis failed. Is the backend running?')
+    } finally {
+      setRunning(false)
     }
   }
 
@@ -75,14 +93,49 @@ export default function ProductivityPanel({ siteId, hasFootage = true }) {
     return () => { ws?.close() }
   }, [siteId])
 
-  if (loading) {
-    return <div style={{ textAlign: 'center', padding: 40, color: '#64748B', fontSize: 14 }}>Loading productivity data...</div>
+  const runButton = (
+    <button
+      onClick={handleRun}
+      disabled={running}
+      style={{
+        padding: '12px 28px', borderRadius: 10,
+        border: '1px solid rgba(249,115,22,0.4)',
+        background: running ? 'rgba(249,115,22,0.08)' : 'rgba(249,115,22,0.14)',
+        color: '#FB923C', fontSize: 14, fontWeight: 600, cursor: running ? 'wait' : 'pointer',
+        transition: 'all 0.2s', marginBottom: 20,
+      }}
+    >
+      {running ? 'Running analysis...' : 'Run productivity analysis'}
+    </button>
+  )
+
+  if (loading && !report) {
+    return (
+      <div>
+        {runButton}
+        <div style={{ textAlign: 'center', padding: 40, color: '#64748B', fontSize: 14 }}>Loading productivity data...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div>
+        {runButton}
+        <div style={{ color: '#FCA5A5', fontSize: 13, padding: '12px 16px', background: 'rgba(239,68,68,0.08)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)' }}>
+          {error}
+        </div>
+      </div>
+    )
   }
 
   if (!report) {
     return (
-      <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>
-        No productivity report yet. Upload footage to generate one.
+      <div>
+        {runButton}
+        <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>
+          No productivity report yet. Click above to run productivity analysis.
+        </div>
       </div>
     )
   }
@@ -91,6 +144,7 @@ export default function ProductivityPanel({ siteId, hasFootage = true }) {
 
   return (
     <div>
+      {runButton}
       {/* ── Trend + Stats Row ───────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
         <div style={{

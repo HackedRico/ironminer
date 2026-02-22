@@ -82,9 +82,9 @@ electrocution), multi-employer worksite doctrine, and hierarchy of controls.
 """ + OSHA_CONTEXT + """\
 
 You will receive:
-1. A JSON list of detected violations with OSHA references, severity, zone, and \
-workers affected.
-2. A timeline of temporal events.
+1. A JSON object with: violations (list), temporal_events (list), and \
+narrative_context_from_video (summary of the video, e.g. from summary.txt).
+2. Use the narrative context to ground your summary in what was actually seen.
 
 Your job — write a field-ready executive summary for the site superintendent:
 - Paragraph 1: Overall risk assessment. Reference the Fatal Four categories present \
@@ -370,6 +370,18 @@ def run_deterministic_checks(result: VideoProcessingResult) -> list[SafetyViolat
 # ── Phase 2: LLM summary ────────────────────────────────────────────────────
 
 
+def _get_summary_text(result: VideoProcessingResult) -> str:
+    """Narrative from summary.txt; video agent stores it in metadata combined_briefing or summary_text."""
+    if getattr(result, "summary_text", None):
+        return (result.summary_text or "").strip()
+    if result.metadata:
+        for key in ("summary_text", "combined_briefing"):
+            val = result.metadata.get(key)
+            if val:
+                return str(val).strip()
+    return ""
+
+
 def _build_summary_prompt(
     violations: list[SafetyViolation],
     result: VideoProcessingResult,
@@ -396,10 +408,13 @@ def _build_summary_prompt(
         for te in result.temporal_events
     ]
 
-    return json.dumps(
-        {"violations": v_dicts, "temporal_events": temporal},
-        indent=2,
-    )
+    narrative = _get_summary_text(result)
+    payload = {
+        "violations": v_dicts,
+        "temporal_events": temporal,
+        "narrative_context_from_video": narrative or "(no narrative)",
+    }
+    return json.dumps(payload, indent=2)
 
 
 def _parse_summary_response(raw: str) -> str:

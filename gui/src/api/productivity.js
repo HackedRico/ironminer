@@ -2,7 +2,11 @@ import { api } from './client'
 
 // ── Existing site-based endpoints ───────────────────────────────────────────
 export const runProductivityAnalysis = (siteId, videoJobId) =>
-  api('/api/productivity/analyze', { method: 'POST', body: JSON.stringify({ site_id: siteId, video_job_id: videoJobId }) })
+  api('/api/productivity/analyze', {
+    method: 'POST',
+    body: JSON.stringify({ site_id: siteId, video_job_id: videoJobId }),
+    signal: AbortSignal.timeout(90000),
+  })
 
 export const fetchProductivityReport = (siteId) => api(`/api/productivity/report/${siteId}`)
 export const fetchZones = (siteId) => api(`/api/productivity/report/${siteId}/zones`)
