@@ -8,8 +8,6 @@ import { MOCK_TIMELINE } from '../utils/mockData'
 
 const LOCAL_KEY = (siteId) => `ironsite_timeline_${siteId}`
 
-const SOURCE_COLOR = { manual: C.blue, upload: C.orange, agent: C.green }
-
 const JOB_STATUS_COLOR = {
   pending:    C.muted,
   processing: C.orange,
@@ -23,12 +21,6 @@ const JOB_STATUS_TEXT = {
   failed:     'Failed',
 }
 
-const fmt = (iso) => {
-  const d = new Date(iso)
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-    ' · ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
-
 function SectionLabel({ children }) {
   return (
     <div style={{
@@ -40,7 +32,7 @@ function SectionLabel({ children }) {
   )
 }
 
-export default function BriefingView({ text, siteId, usingMock }) {
+export default function BriefingView({ text, siteId, usingMock, onJobComplete }) {
   const [localEntries, setLocalEntries] = useState([])
   const [apiEntries, setApiEntries]     = useState([])
   const [noteWho, setNoteWho]           = useState('')
@@ -65,14 +57,34 @@ export default function BriefingView({ text, siteId, usingMock }) {
       .catch(() => setApiEntries([]))
   }, [siteId, usingMock])
 
-  // ── Fetch jobs ────────────────────────────────────────────────────────────
+  // ── Fetch jobs + poll while any are processing ────────────────────────────
   const refreshJobs = () => {
     if (!siteId || usingMock) return
     fetchJobs(siteId)
-      .then(data => setJobs(Array.isArray(data) ? data : []))
+      .then(data => {
+        const next = Array.isArray(data) ? data : []
+        setJobs(prev => {
+          // Detect a job that just transitioned processing → completed
+          const justCompleted = next.some(j =>
+            j.status === 'completed' &&
+            prev.some(p => p.job_id === j.job_id && (p.status === 'processing' || p.status === 'queued'))
+          )
+          if (justCompleted && onJobComplete) onJobComplete()
+          return next
+        })
+      })
       .catch(() => setJobs([]))
   }
   useEffect(() => { refreshJobs() }, [siteId, usingMock])
+
+  // Poll every 4 s while at least one job is still in-flight
+  useEffect(() => {
+    if (usingMock) return
+    const hasActive = jobs.some(j => j.status === 'processing' || j.status === 'queued')
+    if (!hasActive) return
+    const id = setInterval(refreshJobs, 4000)
+    return () => clearInterval(id)
+  }, [jobs, siteId, usingMock])
 
   // ── Persist local entry ───────────────────────────────────────────────────
   const pushLocal = (entry) => {

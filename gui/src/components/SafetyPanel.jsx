@@ -105,7 +105,7 @@ export default function SafetyPanel({ siteId }) {
         transition: 'all 0.2s', marginBottom: 20,
       }}
     >
-      {loading ? 'Running analysis...' : 'Run Safety Analysis'}
+      {loading ? 'Running analysis...' : report ? 'Re-run Safety Analysis' : 'Run Safety Analysis'}
     </button>
   )
 

@@ -99,6 +99,17 @@ export default function ReviewMode() {
 
   const site = sites.find(s => s.id === selectedSite)
 
+  // Called by BriefingView polling when a job transitions processing→completed
+  // (HTTP fallback for when the WebSocket pipeline channel isn't reachable)
+  const handleJobComplete = () => {
+    if (!selectedSite || usingMock) return
+    fetchBriefing(selectedSite).then(b => setBriefing(b.text)).catch(() => {})
+    fetchProductivityReport(selectedSite)
+      .then(report => { if (report?.zones?.length) setZones(report.zones) })
+      .catch(() => fetchZones(selectedSite).then(setZones).catch(() => {}))
+    fetchSites().then(setSites).catch(() => {})
+  }
+
   const handleModalSuccess = (newSite) => {
     fetchSites()
       .then(data => { setSites(data); setSelectedSite(newSite.id) })
@@ -175,7 +186,7 @@ export default function ReviewMode() {
                     AI-generated from {site.frames} frames
                   </span>
                 </div>
-                <BriefingView text={briefing} siteId={selectedSite} usingMock={usingMock} />
+                <BriefingView text={briefing} siteId={selectedSite} usingMock={usingMock} onJobComplete={handleJobComplete} />
               </div>
             )}
 

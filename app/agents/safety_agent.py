@@ -1,9 +1,18 @@
 """Safety Agent — deterministic OSHA rule checks + LLM summary.
 
+<<<<<<< Updated upstream
 Phase 1: Iterate structured classifiers from the Video Agent and apply
          OSHA rules directly on booleans/numbers.  No LLM needed.
 Phase 2: Send the computed violations list to an LLM for an executive
          summary and prioritized recommendations only.
+=======
+Analyzes zone-level spatial data from the video pipeline to detect
+safety violations: missing PPE, zone breaches, clearance issues, and
+blocked corridors.
+
+Input: VideoProcessingResult (fetch via GET /api/video/jobs/{id}/result)
+Output: SafetyReport
+>>>>>>> Stashed changes
 """
 from __future__ import annotations
 
@@ -14,6 +23,7 @@ from datetime import datetime, timezone
 from app.agents.base import BaseAgent
 from app.models.alert import AlertSeverity
 from app.models.analysis import SafetyReport, SafetyViolation
+<<<<<<< Updated upstream
 from app.models.video import (
     VideoProcessingResult,
     ZoneAnalysis,
@@ -421,12 +431,51 @@ def _parse_summary_response(raw: str) -> str:
 
 
 # ── Agent class ──────────────────────────────────────────────────────────────
+=======
+from app.models.video import VideoProcessingResult
+from app.services.storage import SITES
+
+logger = logging.getLogger(__name__)
+
+SAFETY_EXTRACTION_PROMPT = """\
+You are a construction site safety analyst. Given the zone analysis text below, \
+identify any safety violations. Return ONLY a JSON array of violations. Each \
+violation must have these fields:
+- "type": one of "ppe_missing", "zone_breach", "clearance_issue", "blocked_corridor"
+- "description": concise plain-language description of the violation
+- "severity": "high", "medium", or "low"
+- "workers_affected": integer estimate of workers impacted
+
+If no violations are found, return an empty array: []
+
+Zone: {zone_name}
+Analysis:
+{analysis_text}
+
+{relationship_context}
+
+Return ONLY valid JSON, no markdown fences or explanation."""
+
+SUMMARY_PROMPT = """\
+You are a construction site safety officer writing a brief safety summary for a \
+non-technical site manager. Given these safety violations found across the site, \
+write a plain-language summary in 2-4 sentences. Lead with the most critical issue. \
+End with one specific recommendation. No jargon.
+
+Site: {site_name}
+Violations:
+{violations_text}
+
+If there are no violations, say the site has no safety concerns detected and \
+recommend maintaining current practices."""
+>>>>>>> Stashed changes
 
 
 class SafetyAgent(BaseAgent):
     async def process(
         self, site_id: str, video_result: VideoProcessingResult
     ) -> SafetyReport:
+<<<<<<< Updated upstream
         # Phase 1 — deterministic OSHA rule checks (no LLM)
         violations = run_deterministic_checks(video_result)
         ppe_compliance, zone_adherence = _compute_compliance(video_result, violations)
@@ -454,6 +503,43 @@ class SafetyAgent(BaseAgent):
                 f"Overall risk: {overall_risk}. See violations list for details."
             )
 
+=======
+        violations: list[SafetyViolation] = []
+        ppe_compliance: dict[str, bool] = {}
+        zone_adherence: dict[str, bool] = {}
+
+        zone_analyses = video_result.zone_analyses
+        entity_rels = video_result.entity_relationships
+
+        # If zone analyses exist from the video pipeline, use Claude to
+        # extract structured safety violations from the free-text analysis.
+        if zone_analyses:
+            violations = await self._analyze_zones_with_claude(
+                zone_analyses, entity_rels
+            )
+        else:
+            # Fall back to stored site zone data (demo / mock mode).
+            violations = self._analyze_from_site_data(site_id)
+
+        # Build per-zone PPE compliance and zone adherence maps.
+        all_zones: set[str] = set(zone_analyses.keys())
+        site = SITES.get(site_id)
+        if site:
+            all_zones.update(z.zone for z in site.zones)
+
+        for zone_name in all_zones:
+            zone_violations = [v for v in violations if v.zone == zone_name]
+            ppe_compliance[zone_name] = not any(
+                v.type == "ppe_missing" for v in zone_violations
+            )
+            zone_adherence[zone_name] = not any(
+                v.type == "zone_breach" for v in zone_violations
+            )
+
+        overall_risk = self._calculate_risk(violations)
+        summary = await self._generate_summary(site_id, violations)
+
+>>>>>>> Stashed changes
         return SafetyReport(
             site_id=site_id,
             violations=violations,
@@ -463,3 +549,202 @@ class SafetyAgent(BaseAgent):
             summary=summary,
             generated_at=datetime.now(timezone.utc),
         )
+
+    # ── Claude-powered analysis (real video pipeline data) ──────────────
+
+    async def _analyze_zones_with_claude(
+        self,
+        zone_analyses: dict[str, str],
+        entity_relationships: dict[str, str],
+    ) -> list[SafetyViolation]:
+        from app.services.claude_client import call_claude
+
+        violations: list[SafetyViolation] = []
+
+        for zone_name, analysis_text in zone_analyses.items():
+            rel_context = ""
+            if zone_name in entity_relationships:
+                rel_context = (
+                    f"Spatial relationships:\n{entity_relationships[zone_name]}"
+                )
+
+            prompt = SAFETY_EXTRACTION_PROMPT.format(
+                zone_name=zone_name,
+                analysis_text=analysis_text,
+                relationship_context=rel_context,
+            )
+
+            try:
+                raw = await call_claude(
+                    [{"role": "user", "content": prompt}], max_tokens=512
+                )
+                parsed = json.loads(raw)
+                for item in parsed:
+                    violations.append(
+                        SafetyViolation(
+                            zone=zone_name,
+                            type=item["type"],
+                            description=item["description"],
+                            severity=AlertSeverity(item["severity"]),
+                            workers_affected=item.get("workers_affected", 1),
+                        )
+                    )
+            except (json.JSONDecodeError, KeyError, ValueError) as exc:
+                logger.warning(
+                    "Failed to parse safety response for %s: %s", zone_name, exc
+                )
+
+        return violations
+
+    # ── Heuristic analysis from site zone data (demo/mock fallback) ─────
+
+    def _analyze_from_site_data(self, site_id: str) -> list[SafetyViolation]:
+        site = SITES.get(site_id)
+        if not site:
+            return []
+
+        violations: list[SafetyViolation] = []
+
+        for zone in site.zones:
+            # High congestion with multiple trades → clearance hazard
+            if zone.congestion >= 4 and len(zone.trades) >= 2:
+                violations.append(
+                    SafetyViolation(
+                        zone=zone.zone,
+                        type="clearance_issue",
+                        description=(
+                            f"High congestion ({zone.congestion}/5) with "
+                            f"{len(zone.trades)} trades ({', '.join(zone.trades)}) "
+                            f"creates clearance hazards for {zone.workers} workers."
+                        ),
+                        severity=AlertSeverity.high,
+                        workers_affected=zone.workers,
+                    )
+                )
+
+            # Critical status zones → likely blocked movement corridors
+            if zone.status.value == "critical":
+                violations.append(
+                    SafetyViolation(
+                        zone=zone.zone,
+                        type="blocked_corridor",
+                        description=(
+                            f"Zone is at critical status. Movement corridors "
+                            f"likely obstructed by equipment and staged materials "
+                            f"from {', '.join(zone.trades)} operations."
+                        ),
+                        severity=AlertSeverity.high,
+                        workers_affected=zone.workers,
+                    )
+                )
+
+            # High worker density → PPE verification needed
+            if zone.workers >= 6:
+                violations.append(
+                    SafetyViolation(
+                        zone=zone.zone,
+                        type="ppe_missing",
+                        description=(
+                            f"{zone.workers} workers in a congested zone — "
+                            f"PPE compliance verification needed. High worker "
+                            f"density increases risk of undetected PPE gaps."
+                        ),
+                        severity=(
+                            AlertSeverity.high
+                            if zone.congestion >= 4
+                            else AlertSeverity.medium
+                        ),
+                        workers_affected=max(1, zone.workers // 3),
+                    )
+                )
+
+            # Multi-trade zones with warning+ status → zone breach risk
+            if len(zone.trades) >= 2 and zone.status.value != "ok":
+                violations.append(
+                    SafetyViolation(
+                        zone=zone.zone,
+                        type="zone_breach",
+                        description=(
+                            f"Multiple trades ({', '.join(zone.trades)}) sharing "
+                            f"restricted space. Workers from one trade may be "
+                            f"entering the designated area of another."
+                        ),
+                        severity=(
+                            AlertSeverity.high
+                            if zone.congestion >= 4
+                            else AlertSeverity.medium
+                        ),
+                        workers_affected=zone.workers,
+                    )
+                )
+
+        return violations
+
+    # ── Risk calculation ────────────────────────────────────────────────
+
+    def _calculate_risk(self, violations: list[SafetyViolation]) -> str:
+        if not violations:
+            return "low"
+        high_count = sum(1 for v in violations if v.severity == AlertSeverity.high)
+        medium_count = sum(
+            1 for v in violations if v.severity == AlertSeverity.medium
+        )
+        if high_count >= 3:
+            return "critical"
+        if high_count >= 1:
+            return "high"
+        if medium_count >= 2:
+            return "medium"
+        return "low"
+
+    # ── Summary generation ──────────────────────────────────────────────
+
+    async def _generate_summary(
+        self, site_id: str, violations: list[SafetyViolation]
+    ) -> str:
+        site = SITES.get(site_id)
+        site_name = site.name if site else site_id
+
+        try:
+            from app.services.claude_client import call_claude
+
+            violations_text = "\n".join(
+                f"- [{v.severity.value.upper()}] {v.zone}: {v.description}"
+                for v in violations
+            ) or "None detected."
+
+            prompt = SUMMARY_PROMPT.format(
+                site_name=site_name, violations_text=violations_text
+            )
+            return await call_claude(
+                [{"role": "user", "content": prompt}], max_tokens=256
+            )
+        except Exception as exc:
+            logger.warning("Claude summary failed, using fallback: %s", exc)
+            return self._fallback_summary(violations, site_name)
+
+    @staticmethod
+    def _fallback_summary(
+        violations: list[SafetyViolation], site_name: str
+    ) -> str:
+        if not violations:
+            return (
+                f"{site_name} has no safety concerns detected. "
+                f"Maintain current safety practices."
+            )
+
+        high = [v for v in violations if v.severity == AlertSeverity.high]
+        total_affected = sum(v.workers_affected for v in violations)
+        top = high[0] if high else violations[0]
+
+        parts = [
+            f"{site_name}: {len(violations)} safety issue(s) detected",
+        ]
+        if high:
+            parts[0] += f", {len(high)} high-severity"
+        parts.append(
+            f"Approximately {total_affected} workers affected across flagged zones"
+        )
+        parts.append(f"Most urgent: {top.description}")
+        parts.append("Address high-severity violations before next shift change")
+        return ". ".join(parts) + "."
