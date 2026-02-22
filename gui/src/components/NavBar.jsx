@@ -28,6 +28,7 @@ export default function NavBar({ mode, setMode, urgentCount, totalFrames }) {
         }}>
           {[
             { id: 'review', label: 'Review', desc: 'Video summaries & planning' },
+            { id: 'teams', label: 'Teams', desc: 'Daily crew planning' },
             { id: 'live', label: 'Live', desc: 'Streams & comms' },
           ].map(m => (
             <button key={m.id} onClick={() => setMode(m.id)} style={{

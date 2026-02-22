@@ -232,6 +232,71 @@ export const MOCK_TIMELINE = {
   s3: [],
 }
 
+// ── WORKERS (site roster for crew planning) ──────────────────────────────────
+// Endpoint: GET /api/teams/workers?site_id=...
+// Fixed roster — rarely changes. Same names used in ZoneRow's TRADE_WORKERS mock.
+
+export const MOCK_WORKERS = {
+  s1: [
+    // Concrete (5)
+    { id: 'w_s1_01', name: 'M. Rivera',    trade: 'Concrete',   site_id: 's1' },
+    { id: 'w_s1_02', name: 'D. Nguyen',    trade: 'Concrete',   site_id: 's1' },
+    { id: 'w_s1_03', name: 'J. Brooks',    trade: 'Concrete',   site_id: 's1' },
+    { id: 'w_s1_04', name: 'P. Gutierrez', trade: 'Concrete',   site_id: 's1' },
+    { id: 'w_s1_05', name: 'S. Patel',     trade: 'Concrete',   site_id: 's1' },
+    // Electrical (5)
+    { id: 'w_s1_06', name: 'K. Johnson',   trade: 'Electrical', site_id: 's1' },
+    { id: 'w_s1_07', name: 'R. Thompson',  trade: 'Electrical', site_id: 's1' },
+    { id: 'w_s1_08', name: 'A. Garcia',    trade: 'Electrical', site_id: 's1' },
+    { id: 'w_s1_09', name: 'L. Kim',       trade: 'Electrical', site_id: 's1' },
+    { id: 'w_s1_10', name: 'T. Davis',     trade: 'Electrical', site_id: 's1' },
+    // Plumbing (3)
+    { id: 'w_s1_11', name: 'F. Martinez',  trade: 'Plumbing',   site_id: 's1' },
+    { id: 'w_s1_12', name: 'B. Wilson',    trade: 'Plumbing',   site_id: 's1' },
+    { id: 'w_s1_13', name: 'C. Rodriguez', trade: 'Plumbing',   site_id: 's1' },
+    // Framing (5)
+    { id: 'w_s1_14', name: 'R. Chen',      trade: 'Framing',    site_id: 's1' },
+    { id: 'w_s1_15', name: 'J. Santos',    trade: 'Framing',    site_id: 's1' },
+    { id: 'w_s1_16', name: 'M. Baker',     trade: 'Framing',    site_id: 's1' },
+    { id: 'w_s1_17', name: 'D. Williams',  trade: 'Framing',    site_id: 's1' },
+    { id: 'w_s1_18', name: 'A. Lee',       trade: 'Framing',    site_id: 's1' },
+    // HVAC (2)
+    { id: 'w_s1_19', name: 'E. Taylor',    trade: 'HVAC',       site_id: 's1' },
+    { id: 'w_s1_20', name: 'N. Hernandez', trade: 'HVAC',       site_id: 's1' },
+    // Crane Ops (1)
+    { id: 'w_s1_21', name: 'P. Anderson',  trade: 'Crane Ops',  site_id: 's1' },
+    // Delivery (2)
+    { id: 'w_s1_22', name: 'T. Williams',  trade: 'Delivery',   site_id: 's1' },
+    { id: 'w_s1_23', name: 'O. Jackson',   trade: 'Delivery',   site_id: 's1' },
+  ],
+  s2: [
+    { id: 'w_s2_01', name: 'V. Castro',   trade: 'Steel Erection', site_id: 's2' },
+    { id: 'w_s2_02', name: 'M. Okafor',   trade: 'Steel Erection', site_id: 's2' },
+    { id: 'w_s2_03', name: 'J. Park',     trade: 'Steel Erection', site_id: 's2' },
+    { id: 'w_s2_04', name: 'B. Singh',    trade: 'Steel Erection', site_id: 's2' },
+    { id: 'w_s2_05', name: 'L. Morales',  trade: 'Steel Erection', site_id: 's2' },
+    { id: 'w_s2_06', name: 'W. James',    trade: 'Concrete',       site_id: 's2' },
+    { id: 'w_s2_07', name: 'R. Patel',    trade: 'Concrete',       site_id: 's2' },
+    { id: 'w_s2_08', name: 'C. Kim',      trade: 'Concrete',       site_id: 's2' },
+    { id: 'w_s2_09', name: 'S. Martinez', trade: 'Plumbing',       site_id: 's2' },
+    { id: 'w_s2_10', name: 'A. Thompson', trade: 'Plumbing',       site_id: 's2' },
+    { id: 'w_s2_11', name: 'D. Lee',      trade: 'Plumbing',       site_id: 's2' },
+    { id: 'w_s2_12', name: 'H. Brown',    trade: 'Delivery',       site_id: 's2' },
+    { id: 'w_s2_13', name: 'E. White',    trade: 'Delivery',       site_id: 's2' },
+    { id: 'w_s2_14', name: 'G. Davis',    trade: 'Staging',        site_id: 's2' },
+  ],
+  s3: [
+    { id: 'w_s3_01', name: 'C. Nelson',  trade: 'Framing',  site_id: 's3' },
+    { id: 'w_s3_02', name: 'T. Green',   trade: 'Framing',  site_id: 's3' },
+    { id: 'w_s3_03', name: 'M. Clark',   trade: 'Framing',  site_id: 's3' },
+    { id: 'w_s3_04', name: 'J. Adams',   trade: 'Framing',  site_id: 's3' },
+    { id: 'w_s3_05', name: 'B. Turner',  trade: 'Cladding', site_id: 's3' },
+    { id: 'w_s3_06', name: 'S. Evans',   trade: 'Cladding', site_id: 's3' },
+    { id: 'w_s3_07', name: 'P. Cooper',  trade: 'Cladding', site_id: 's3' },
+    { id: 'w_s3_08', name: 'O. Murphy',  trade: 'Concrete', site_id: 's3' },
+  ],
+}
+
 // ── HELPER: check if backend is reachable ────────────────────────────────────
 
 let _backendAvailable = null
