@@ -4,11 +4,15 @@ On video upload, reads the pre-generated summary from app/summarizer/summary.txt
 builds structured ZoneAnalysis data from it, and returns a full VideoProcessingResult
 that the safety and productivity agents can process.
 
+Supports canned demo scenarios: if demo_assets/{filename}.json exists, zones are
+loaded from that file instead of summary.txt.
+
 To regenerate summary.txt with a new video:
   python app/summarizer/summary.py --video path/to/video.mp4 --output app/summarizer/summary.txt
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +36,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["VideoAgent", "split_video"]
 
 _SUMMARY_PATH = Path(__file__).resolve().parent.parent / "summarizer" / "summary.txt"
+_DEMO_ASSETS = Path(__file__).resolve().parent.parent.parent / "demo_assets"
 
 
 def _build_zones_from_summary(text: str) -> list[ZoneAnalysis]:
@@ -163,6 +168,23 @@ def _build_zones_from_summary(text: str) -> list[ZoneAnalysis]:
 
 
 class VideoAgent(BaseAgent):
+    @staticmethod
+    def _find_canned_json(file_path: str) -> Path | None:
+        """Check demo_assets/ for a canned JSON matching the uploaded filename."""
+        if not _DEMO_ASSETS.is_dir():
+            return None
+        stem = Path(file_path).stem
+        # Try exact stem first, then strip UUID prefix added by upload endpoint
+        candidates = [stem]
+        parts = stem.split("_", 1)
+        if len(parts) == 2:
+            candidates.append(parts[1])
+        for candidate in candidates:
+            check = _DEMO_ASSETS / f"{candidate}.json"
+            if check.is_file():
+                return check
+        return None
+
     async def process(
         self,
         job_id: str,
@@ -170,16 +192,25 @@ class VideoAgent(BaseAgent):
         file_path: str,
         frame_interval: float = 5.0,
     ) -> VideoProcessingResult:
-        # Read cached Pegasus summary
-        if _SUMMARY_PATH.is_file():
-            analysis_text = _SUMMARY_PATH.read_text().strip()
-            logger.info("Loaded cached Pegasus summary: %d chars from %s", len(analysis_text), _SUMMARY_PATH)
+        # Check for canned demo asset matching uploaded filename
+        canned_path = self._find_canned_json(file_path)
+        if canned_path:
+            data = json.loads(canned_path.read_text())
+            zones = [ZoneAnalysis(**z) for z in data["zones"]]
+            analysis_text = data.get("briefing", "Canned demo scenario loaded.")
+            logger.info("Loaded canned demo zones from %s (%d zones)", canned_path.name, len(zones))
         else:
-            analysis_text = "No Pegasus summary available. Run: python app/summarizer/summary.py --video <path>"
-            logger.warning("summary.txt not found at %s", _SUMMARY_PATH)
+            # Read cached Pegasus summary
+            if _SUMMARY_PATH.is_file():
+                analysis_text = _SUMMARY_PATH.read_text().strip()
+                logger.info("Loaded cached Pegasus summary: %d chars from %s", len(analysis_text), _SUMMARY_PATH)
+            else:
+                analysis_text = "No Pegasus summary available. Run: python app/summarizer/summary.py --video <path>"
+                logger.warning("summary.txt not found at %s", _SUMMARY_PATH)
 
-        # Build structured zones from the summary
-        zones = _build_zones_from_summary(analysis_text)
+            # Build structured zones from the summary
+            zones = _build_zones_from_summary(analysis_text)
+
         logger.info("Built %d structured zones from summary", len(zones))
 
         # Extract thumbnails from uploaded video

@@ -1,0 +1,137 @@
+{
+  "briefing": "Site walkthrough reveals active masonry and roofing operations on the east wing. Zone A masonry staging is well-organized but egress path partially blocked by mortar pallets. Zone B roofing crew at 25 ft elevation — two workers missing fall harness tie-off. Zone C ground-level MEP rough-in proceeding on schedule with three trades sharing space. Scaffold in Zone B needs guardrail inspection before afternoon shift.\n\nRecommendation: Address fall protection in Zone B immediately — harness tie-off is required above 6 ft. Clear mortar pallets from Zone A egress path. Monitor Zone C trade overlap — currently manageable but approaching threshold.",
+  "zones": [
+    {
+      "zone_id": "zw1",
+      "zone_name": "Zone A — East Wing Masonry Staging",
+      "trades_present": ["masonry", "delivery"],
+      "area_sqft": 1000,
+      "workers": [
+        {
+          "worker_id": "ww1", "trade": "masonry",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true, "safety_glasses": true, "gloves": true}
+        },
+        {
+          "worker_id": "ww2", "trade": "masonry",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true, "gloves": true}
+        },
+        {
+          "worker_id": "ww3", "trade": "masonry",
+          "ppe": {"hard_hat": true, "hi_vis_vest": false, "gloves": true}
+        },
+        {
+          "worker_id": "ww4", "trade": "delivery",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true}
+        }
+      ],
+      "equipment": [],
+      "hazards": [],
+      "egress": [
+        {
+          "path_id": "egw1", "zone_id": "zw1", "blocked": true,
+          "blocking_material": "mortar pallets and scaffolding components"
+        }
+      ],
+      "material_stacks": [
+        {"zone_id": "zw1", "material_type": "brick pallets", "height_ft": 5, "cross_braced": true}
+      ]
+    },
+    {
+      "zone_id": "zw2",
+      "zone_name": "Zone B — Roofing / Elevated Work",
+      "trades_present": ["roofing", "scaffolding"],
+      "area_sqft": 600,
+      "workers": [
+        {
+          "worker_id": "ww5", "trade": "roofing",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true, "fall_harness": true, "harness_tied_off": true},
+          "elevation_ft": 25, "on_scaffold": true
+        },
+        {
+          "worker_id": "ww6", "trade": "roofing",
+          "ppe": {"hard_hat": true, "fall_harness": true, "harness_tied_off": false},
+          "elevation_ft": 25, "on_scaffold": true, "near_edge": true
+        },
+        {
+          "worker_id": "ww7", "trade": "roofing",
+          "ppe": {"hard_hat": true, "fall_harness": false},
+          "elevation_ft": 25, "on_scaffold": true
+        },
+        {
+          "worker_id": "ww8", "trade": "scaffolding",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true, "fall_harness": true, "harness_tied_off": true},
+          "elevation_ft": 15
+        }
+      ],
+      "equipment": [],
+      "hazards": [],
+      "egress": [],
+      "material_stacks": []
+    },
+    {
+      "zone_id": "zw3",
+      "zone_name": "Zone C — Ground Level MEP Rough-In",
+      "trades_present": ["electrical", "plumbing", "HVAC"],
+      "area_sqft": 450,
+      "workers": [
+        {
+          "worker_id": "ww9", "trade": "electrical",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true, "safety_glasses": true}
+        },
+        {
+          "worker_id": "ww10", "trade": "electrical",
+          "ppe": {"hard_hat": false, "safety_glasses": true}
+        },
+        {
+          "worker_id": "ww11", "trade": "plumbing",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true}
+        },
+        {
+          "worker_id": "ww12", "trade": "plumbing",
+          "ppe": {"hard_hat": true}
+        },
+        {
+          "worker_id": "ww13", "trade": "HVAC",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true}
+        }
+      ],
+      "equipment": [],
+      "hazards": [
+        {
+          "hazard_id": "hzw1", "type": "electrical_exposure", "zone_id": "zw3",
+          "description": "Open junction box with exposed wiring near plumbing work area",
+          "loto_signage_visible": false
+        }
+      ],
+      "egress": [
+        {
+          "path_id": "egw3", "zone_id": "zw3", "blocked": true,
+          "blocking_material": "conduit bundles and pipe sections"
+        }
+      ],
+      "material_stacks": [
+        {"zone_id": "zw3", "material_type": "conduit", "height_ft": 7, "cross_braced": false}
+      ]
+    },
+    {
+      "zone_id": "zw4",
+      "zone_name": "Zone D — Parking / Equipment Staging",
+      "trades_present": ["delivery"],
+      "area_sqft": 3000,
+      "workers": [
+        {
+          "worker_id": "ww14", "trade": "delivery",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true}
+        },
+        {
+          "worker_id": "ww15", "trade": "delivery",
+          "ppe": {"hard_hat": true, "hi_vis_vest": true}
+        }
+      ],
+      "equipment": [],
+      "hazards": [],
+      "egress": [],
+      "material_stacks": []
+    }
+  ]
+}

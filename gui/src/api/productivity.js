@@ -11,7 +11,7 @@ export const fetchSuggestions = (siteId) => api(`/api/productivity/report/${site
 export const fetchTrend = (siteId, hours = 24) => api(`/api/productivity/trend/${siteId}?hours=${hours}`)
 
 // ── Teams ───────────────────────────────────────────────────────────────────
-export const fetchTeams = () => api('/api/productivity/teams')
+export const fetchTeams = (siteId) => api(`/api/productivity/teams${siteId ? `?site_id=${siteId}` : ''}`)
 export const fetchTeam = (teamId) => api(`/api/productivity/teams/${teamId}`)
 
 // ── Benchmarks ──────────────────────────────────────────────────────────────

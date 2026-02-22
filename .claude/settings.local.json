@@ -13,7 +13,12 @@
       "Bash(cd /c/Users/chukw/Desktop/Programming/ironminer && python -c \"\nfrom app.services.team_service import initialize\ninitialize\\(\\)\n\nfrom app.services import team_service\nworkers = team_service.get_site_workers\\('s1'\\)\nprint\\(f'Workers loaded: {len\\(workers\\)} for s1'\\)\n\nfrom pathlib import Path\nwf = Path\\('data/workers.json'\\)\ntf = Path\\('data/teams.json'\\)\nprint\\(f'workers.json exists: {wf.exists\\(\\)} \\({wf.stat\\(\\).st_size} bytes\\)'\\)\nprint\\(f'teams.json exists:   {tf.exists\\(\\)} \\({tf.stat\\(\\).st_size} bytes\\)'\\)\n\" 2>&1)",
       "Bash(cd:*)",
       "Bash(.venv/Scripts/python:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(source .venv/bin/activate && python -c \"from app.services.storage import SAFETY_REPORTS, PRODUCTIVITY_REPORTS, BENCHMARKS; print\\(f'Safety reports: {list\\(SAFETY_REPORTS.keys\\(\\)\\)}'\\); print\\(f'Productivity reports: {list\\(PRODUCTIVITY_REPORTS.keys\\(\\)\\)}'\\); print\\(f'Benchmarks: {list\\(BENCHMARKS.keys\\(\\)\\)}'\\)\" 2>&1)",
+      "Bash(source .venv/bin/activate && python -c \"\nfrom app.services.storage import SAFETY_REPORTS, PRODUCTIVITY_REPORTS\ns1 = SAFETY_REPORTS['s1']\nprint\\(f's1 safety: {s1.overall_risk} risk, {len\\(s1.violations\\)} violations'\\)\nfor v in s1.violations[:3]:\n    print\\(f'  - [{v.severity}] {v.zone}: {v.description[:80]}...'\\)\np1 = PRODUCTIVITY_REPORTS['s1']\nprint\\(f's1 productivity: {len\\(p1.zones\\)} zones, {len\\(p1.trade_overlaps\\)} overlaps, trend={p1.congestion_trend}'\\)\ns2 = SAFETY_REPORTS['s2']\nprint\\(f's2 safety: {s2.overall_risk} risk, {len\\(s2.violations\\)} violations'\\)\np2 = PRODUCTIVITY_REPORTS['s2']\nprint\\(f's2 productivity: {len\\(p2.zones\\)} zones, {len\\(p2.trade_overlaps\\)} overlaps'\\)\n\" 2>&1)",
+      "Bash(source .venv/bin/activate && python -c \"\nfrom app.agents.evaluator_factory import get_evaluator\ne = get_evaluator\\(standards=['All workers wearing hard hats', 'Egress paths clear']\\)\nprint\\(f'Evaluator type: {type\\(e\\).__name__}'\\)\nprint\\(f'Threshold: {e.pass_threshold}'\\)\nreports = e.evaluate_from_texts\\({'z1': 'Workers detected without hard hats in the construction zone. Egress path blocked by debris.'}\\)\nfor r in reports:\n    print\\(f'Zone {r.zone_id}: score={r.completion_score:.3f}, passed={r.passed_count}/{r.total_standards}'\\)\n    for m in r.matches:\n        print\\(f'  [{\\\\\"PASS\\\\\" if m.passed else \\\\\"FAIL\\\\\"}] {m.standard_text}: {m.similarity:.3f}'\\)\n\" 2>&1)",
+      "Bash(source .venv/bin/activate && uvicorn app.main:app --reload --port 8000 2>&1)",
+      "Bash(cd /Users/israelogwu/Documents/vscode/ironminer/gui && npm run dev 2>&1)"
     ]
   }
 }

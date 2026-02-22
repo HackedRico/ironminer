@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { fetchProductivityReport } from '../api/productivity'
 import { connectPipeline } from '../api/streaming'
+import BenchmarkView from './BenchmarkView'
 
 const trendColor = {
   improving: { bg: 'rgba(34,197,94,0.14)', border: '#22C55E', text: '#86EFAC' },
@@ -34,6 +35,7 @@ function parseSummary(raw) {
 }
 
 export default function ProductivityPanel({ siteId, hasFootage = true }) {
+  const [view, setView] = useState('overview') // 'overview' | 'benchmarks'
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(true)
   const [expandedZone, setExpandedZone] = useState(null)
@@ -75,14 +77,40 @@ export default function ProductivityPanel({ siteId, hasFootage = true }) {
     return () => { ws?.close() }
   }, [siteId])
 
+  const tabStyle = (active) => ({
+    padding: '8px 18px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+    background: active ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.04)',
+    color: active ? '#FB923C' : '#64748B',
+    border: active ? '1px solid rgba(249,115,22,0.3)' : '1px solid rgba(255,255,255,0.06)',
+    transition: 'all 0.2s',
+  })
+
+  if (view === 'benchmarks') {
+    return (
+      <div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+          <div style={tabStyle(false)} onClick={() => setView('overview')}>Site Overview</div>
+          <div style={tabStyle(true)} onClick={() => setView('benchmarks')}>Team Benchmarks</div>
+        </div>
+        <BenchmarkView siteId={siteId} />
+      </div>
+    )
+  }
+
   if (loading) {
     return <div style={{ textAlign: 'center', padding: 40, color: '#64748B', fontSize: 14 }}>Loading productivity data...</div>
   }
 
   if (!report) {
     return (
-      <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>
-        No productivity report yet. Upload footage to generate one.
+      <div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+          <div style={tabStyle(true)} onClick={() => setView('overview')}>Site Overview</div>
+          <div style={tabStyle(false)} onClick={() => setView('benchmarks')}>Team Benchmarks</div>
+        </div>
+        <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>
+          No productivity report yet. Upload footage to generate one.
+        </div>
       </div>
     )
   }
@@ -91,6 +119,11 @@ export default function ProductivityPanel({ siteId, hasFootage = true }) {
 
   return (
     <div>
+      {/* ── View Toggle ──────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <div style={tabStyle(true)} onClick={() => setView('overview')}>Site Overview</div>
+        <div style={tabStyle(false)} onClick={() => setView('benchmarks')}>Team Benchmarks</div>
+      </div>
       {/* ── Trend + Stats Row ───────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
         <div style={{

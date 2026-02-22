@@ -1,12 +1,17 @@
 """In-memory storage for hackathon. Replace with a real DB later if needed."""
 from __future__ import annotations
-from datetime import datetime, timezone
+
+import logging
+from datetime import date as date_type, datetime, timezone
 
 from app.models.site import Site, Zone, ZoneStatus
 from app.models.alert import Alert, AlertSeverity
 from app.models.video import VideoJob, FrameData, VideoProcessingResult
 from app.models.analysis import SafetyReport, ProductivityReport
 from app.models.streaming import FeedConfig
+from app.models.benchmarks import Benchmark, BenchmarkGoal, EvaluationResult
+
+logger = logging.getLogger(__name__)
 
 now = datetime.now(timezone.utc)
 
@@ -89,12 +94,130 @@ FEEDS: dict[str, FeedConfig] = {
 
 VIDEO_JOBS: dict[str, VideoJob] = {}
 
-# Seed mock video result so /api/safety/analyze works out of the box
-from app.data.mock_video_results import MOCK_VIDEO_RESULT  # noqa: E402
+# Seed mock video results so /api/safety/analyze works out of the box
+from app.data.mock_video_results import MOCK_VIDEO_RESULT, MOCK_VIDEO_RESULT_S2  # noqa: E402
 
 VIDEO_RESULTS: dict[str, VideoProcessingResult] = {
     MOCK_VIDEO_RESULT.job_id: MOCK_VIDEO_RESULT,
+    MOCK_VIDEO_RESULT_S2.job_id: MOCK_VIDEO_RESULT_S2,
 }
-FRAMES: dict[str, list[FrameData]] = {}  # site_id -> frames
+FRAMES: dict[str, list[FrameData]] = {
+    "s1": MOCK_VIDEO_RESULT.frames,
+    "s2": MOCK_VIDEO_RESULT_S2.frames,
+}
 SAFETY_REPORTS: dict[str, SafetyReport] = {}  # site_id -> latest
 PRODUCTIVITY_REPORTS: dict[str, ProductivityReport] = {}  # site_id -> latest
+BENCHMARKS: dict[str, Benchmark] = {}  # key: "{team_id}:{date}:{version}"
+EVALUATIONS: dict[str, EvaluationResult] = {}  # key: "{team_id}:{date}"
+
+
+# ── Pre-seed safety + productivity reports using Phase 1 deterministic logic ──
+
+def _seed_demo_reports():
+    """Populate safety/productivity reports so all demo tabs have data at startup."""
+    from app.agents.safety_agent import (
+        run_deterministic_checks, _compute_compliance, _compute_overall_risk,
+    )
+    from app.agents.productivity_agent import (
+        _build_zones, _detect_trade_overlaps, _generate_suggestions,
+    )
+
+    for vr in [MOCK_VIDEO_RESULT, MOCK_VIDEO_RESULT_S2]:
+        sid = vr.site_id
+
+        # Safety report (Phase 1 only — no LLM)
+        violations = run_deterministic_checks(vr)
+        ppe_c, zone_a = _compute_compliance(vr, violations)
+        risk = _compute_overall_risk(violations)
+        SAFETY_REPORTS[sid] = SafetyReport(
+            site_id=sid, violations=violations,
+            ppe_compliance=ppe_c, zone_adherence=zone_a,
+            overall_risk=risk,
+            summary=(
+                f"{len(violations)} safety violations detected across "
+                f"{len(vr.zones)} zones. Overall risk: {risk}. "
+                f"See violations list for OSHA citations and corrective actions."
+            ),
+            generated_at=now,
+        )
+
+        # Productivity report (Phase 1 only — no LLM)
+        zones = _build_zones(vr)
+        overlaps = _detect_trade_overlaps(vr)
+        trend = "stable"
+        suggestions = _generate_suggestions(zones, overlaps, trend)
+        PRODUCTIVITY_REPORTS[sid] = ProductivityReport(
+            site_id=sid, zones=zones, trade_overlaps=overlaps,
+            congestion_trend=trend, resource_suggestions=suggestions,
+            summary=(
+                f"{len(zones)} zones analyzed. "
+                f"{sum(1 for z in zones if z.status == ZoneStatus.critical)} critical, "
+                f"{len(overlaps)} trade overlaps. Congestion trend: {trend}."
+            ),
+            generated_at=now,
+        )
+
+        logger.info("Seeded safety (%s risk, %d violations) + productivity (%d zones) for %s",
+                     risk, len(violations), len(zones), sid)
+
+
+def _seed_demo_benchmarks():
+    """Pre-seed teams and benchmarks for the productivity benchmark demo flow."""
+    from app.services.team_service import TEAMS as TEAM_STORE
+    from app.models.teams import Team
+
+    today = str(date_type.today())
+
+    # Create demo teams for today
+    demo_teams = [
+        Team(id="demo_team_1", site_id="s1", date=today, name="Electrical Crew",
+             task="Panel installation + conduit routing", zone="Zone B — Level 3 East Scaffolding",
+             worker_ids=["w_s1_06", "w_s1_07", "w_s1_08"], color_index=0),
+        Team(id="demo_team_2", site_id="s1", date=today, name="Framing Crew",
+             task="North face framing + sheathing", zone="Zone C — North Exterior",
+             worker_ids=["w_s1_14", "w_s1_15", "w_s1_16", "w_s1_17"], color_index=1),
+        Team(id="demo_team_3", site_id="s2", date=today, name="Steel Erection",
+             task="Beam placement west bay", zone="Zone A — West Bay",
+             worker_ids=["w_s2_01", "w_s2_02", "w_s2_03"], color_index=2),
+    ]
+    for t in demo_teams:
+        TEAM_STORE[t.id] = t
+
+    # Create benchmarks for each team
+    BENCHMARKS[f"demo_team_1:{today}:1"] = Benchmark(
+        team_id="demo_team_1", date=today, version=1,
+        goals=[
+            BenchmarkGoal(id="g1", description="Complete panel installation on east wall", category="progress"),
+            BenchmarkGoal(id="g2", description="All electrical conduit routed per plan in Zone B", category="quality"),
+            BenchmarkGoal(id="g3", description="Zone B egress paths clear of staged materials", category="safety"),
+            BenchmarkGoal(id="g4", description="All workers wearing required PPE including hard hats", category="safety"),
+        ],
+        created_at=now, updated_at=now,
+    )
+    BENCHMARKS[f"demo_team_2:{today}:1"] = Benchmark(
+        team_id="demo_team_2", date=today, version=1,
+        goals=[
+            BenchmarkGoal(id="g1", description="North face framing 80% complete by end of day", category="progress"),
+            BenchmarkGoal(id="g2", description="All workers at elevation have fall harness tied off", category="safety"),
+            BenchmarkGoal(id="g3", description="Crane operations have signal person with clear line of sight", category="safety"),
+            BenchmarkGoal(id="g4", description="No workers in crane swing radius without hard hats", category="safety"),
+        ],
+        created_at=now, updated_at=now,
+    )
+    BENCHMARKS[f"demo_team_3:{today}:1"] = Benchmark(
+        team_id="demo_team_3", date=today, version=1,
+        goals=[
+            BenchmarkGoal(id="g1", description="West bay beam placement on schedule", category="progress"),
+            BenchmarkGoal(id="g2", description="All workers at elevation wearing fall harness properly anchored", category="safety"),
+            BenchmarkGoal(id="g3", description="Material staging does not block emergency vehicle access lanes", category="safety"),
+        ],
+        created_at=now, updated_at=now,
+    )
+
+    logger.info("Seeded %d demo teams and %d benchmarks for %s",
+                len(demo_teams), len(BENCHMARKS), today)
+
+
+# Run seeding
+_seed_demo_reports()
+_seed_demo_benchmarks()

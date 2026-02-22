@@ -5,3 +5,15 @@ All required PPE is present on all workers.
 Electrical cords are routed with no tripping hazards.
 
 Rebar is installed and tied according to plan.
+
+All scaffolding has guardrails and toe boards installed.
+
+Workers at elevation above 6 feet have fall protection harness properly anchored.
+
+Hot work areas have designated fire watch personnel within 35 feet.
+
+Material staging does not block emergency vehicle access lanes.
+
+All power tools have appropriate guards and safety mechanisms in place.
+
+Egress paths and corridors are clear and unobstructed at all times.

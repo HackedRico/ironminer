@@ -439,3 +439,97 @@ MOCK_VIDEO_RESULT = VideoProcessingResult(
         "confidence_avg": 0.87,
     },
 )
+
+# ── Site s2 — Harbor Warehouse ────────────────────────────────────────────────
+MOCK_VIDEO_RESULT_S2 = VideoProcessingResult(
+    job_id="mock_vj_002",
+    site_id="s2",
+    frames=[
+        FrameData(id="frame_s2_001", site_id="s2", timestamp=1700000000.0, image_data="", filename="harbor_cam5_09h00.jpg"),
+        FrameData(id="frame_s2_002", site_id="s2", timestamp=1700000300.0, image_data="", filename="harbor_cam5_09h05.jpg"),
+    ],
+    zones=[
+        # Zone A — West Bay: 5 steel erection workers, generally compliant
+        ZoneAnalysis(
+            zone_id="zone_s2_a",
+            zone_name="Zone A — West Bay",
+            trades_present=["steel_erection"],
+            area_sqft=1800.0,
+            workers=[
+                WorkerDetection(worker_id="w_s2a1", trade="steel_erection",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True, fall_harness=True, harness_tied_off=True, safety_glasses=True),
+                    elevation_ft=15.0),
+                WorkerDetection(worker_id="w_s2a2", trade="steel_erection",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True, fall_harness=True, harness_tied_off=True),
+                    elevation_ft=15.0),
+                WorkerDetection(worker_id="w_s2a3", trade="steel_erection",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True, safety_glasses=True)),
+                WorkerDetection(worker_id="w_s2a4", trade="steel_erection",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True)),
+                WorkerDetection(worker_id="w_s2a5", trade="steel_erection",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True)),
+            ],
+        ),
+        # Zone B — East Bay: 6 workers (concrete + plumbing), PPE violations
+        ZoneAnalysis(
+            zone_id="zone_s2_b",
+            zone_name="Zone B — East Bay",
+            trades_present=["concrete", "plumbing"],
+            area_sqft=900.0,
+            workers=[
+                WorkerDetection(worker_id="w_s2b1", trade="concrete",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True, safety_glasses=True, gloves=True)),
+                WorkerDetection(worker_id="w_s2b2", trade="concrete",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True, gloves=True)),
+                WorkerDetection(worker_id="w_s2b3", trade="concrete",
+                    ppe=PPEDetection(hard_hat=False, hi_vis_vest=True)),  # missing hard hat
+                WorkerDetection(worker_id="w_s2b4", trade="plumbing",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True)),
+                WorkerDetection(worker_id="w_s2b5", trade="plumbing",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=False)),
+                WorkerDetection(worker_id="w_s2b6", trade="plumbing",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True),
+                    on_ladder=True, elevation_ft=4.0, three_point_contact=False),  # ladder violation
+            ],
+            egress=[
+                EgressStatus(path_id="eg_s2b1", zone_id="zone_s2_b", blocked=True,
+                    blocking_material="concrete forms and rebar bundles"),
+            ],
+        ),
+        # Zone C — South Access Road: 3 workers, material blocking emergency access
+        ZoneAnalysis(
+            zone_id="zone_s2_c",
+            zone_name="Zone C — South Access Road",
+            trades_present=["delivery", "staging"],
+            area_sqft=2500.0,
+            workers=[
+                WorkerDetection(worker_id="w_s2c1", trade="delivery",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True)),
+                WorkerDetection(worker_id="w_s2c2", trade="delivery",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True)),
+                WorkerDetection(worker_id="w_s2c3", trade="staging",
+                    ppe=PPEDetection(hard_hat=True, hi_vis_vest=True)),
+            ],
+            egress=[
+                EgressStatus(path_id="eg_s2c1", zone_id="zone_s2_c", blocked=True,
+                    blocking_material="lumber staging across access road",
+                    emergency_access=True),
+            ],
+            material_stacks=[
+                MaterialStack(zone_id="zone_s2_c", material_type="lumber", height_ft=7.0, cross_braced=False),
+            ],
+        ),
+    ],
+    trade_proximities=[],
+    temporal_events=[
+        TemporalEvent(timestamp=1700000000.0, zone_id="zone_s2_b", event_type="congestion_change",
+            detail="Concrete and plumbing crews sharing east bay. Moderate congestion."),
+        TemporalEvent(timestamp=1700000300.0, zone_id="zone_s2_c", event_type="hazard_appeared",
+            detail="Lumber delivery staged across main access road, blocking emergency vehicle lane."),
+    ],
+    metadata={
+        "camera_sources": ["cam5", "cam6"],
+        "analysis_model": "mock_data",
+        "confidence_avg": 0.84,
+    },
+)
