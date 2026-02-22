@@ -110,8 +110,6 @@ ironminer/
 └── requirements.txt        Python dependencies
 ```
 
-See [FRONTEND_AND_PROJ_STRUCTURE.md](FRONTEND_AND_PROJ_STRUCTURE.md) for the full file-by-file breakdown, API endpoint reference, and onboarding guide for new contributors.
-
 ## API Overview
 
 All endpoints are at `/api/*`. Full details in the Swagger docs at `http://localhost:8000/docs`.
