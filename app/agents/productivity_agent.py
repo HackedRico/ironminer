@@ -12,16 +12,23 @@ from app.models.analysis import ProductivityReport
 from app.models.video import VideoProcessingResult
 
 
+def _get_summary_text(video_result: VideoProcessingResult) -> str | None:
+    """Summary from local summary.txt (avoids Twelve Labs rate limit)."""
+    if video_result.summary_text:
+        return video_result.summary_text
+    return video_result.metadata.get("summary_text") if video_result.metadata else None
+
+
 class ProductivityAgent(BaseAgent):
     async def process(self, site_id: str, video_result: VideoProcessingResult) -> ProductivityReport:
-        # TODO: implement productivity analysis
-        # 1. Score congestion per zone from video_result.zone_analyses
-        # 2. Detect trade overlaps (multiple trades in same zone)
-        # 3. Compare against previous analysis for trend
-        # 4. Generate resource allocation suggestions
-        # 5. Write plain-language summary
+        # Use local summary (e.g. summary.txt) when present; no Twelve Labs call
+        summary_text = _get_summary_text(video_result)
+        if summary_text:
+            summary = summary_text.strip()
+        else:
+            summary = "No productivity analysis run yet."
         return ProductivityReport(
             site_id=site_id,
-            summary="No productivity analysis run yet.",
+            summary=summary,
             generated_at=datetime.now(timezone.utc),
         )

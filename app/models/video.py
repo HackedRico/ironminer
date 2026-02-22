@@ -123,6 +123,9 @@ class VideoProcessingResult(BaseModel):
     temporal_events: list[TemporalEvent] = []
     metadata: dict[str, Any] = {}
 
+    # Local summary (e.g. from summary.txt) — used by safety/productivity agents when Twelve Labs is rate-limited
+    summary_text: Optional[str] = None
+
     # Deprecated — kept for backward compatibility during transition
     zone_analyses: Optional[dict[str, str]] = None
     entity_relationships: Optional[dict[str, str]] = None

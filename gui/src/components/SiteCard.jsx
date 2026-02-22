@@ -24,7 +24,6 @@ export default function SiteCard({ site, selected, onClick }) {
       <div style={{ display: 'flex', gap: 20, fontSize: 12, color: '#94A3B8' }}>
         <span><strong style={{ color: '#CBD5E1' }}>{site.trades}</strong> trades</span>
         <span><strong style={{ color: '#CBD5E1' }}>{site.workers}</strong> workers</span>
-        <span><strong style={{ color: '#CBD5E1' }}>{site.frames}</strong> frames</span>
       </div>
       <div style={{ marginTop: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#94A3B8' }}>

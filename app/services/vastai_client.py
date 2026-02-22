@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 from tenacity import retry, stop_after_attempt, wait_exponential, before_sleep_log
-from vastai import VastAI
+from vastai_sdk import VastAI
 
 from app.config import VASTAI_API_KEY, VASTAI_INSTANCE_ID
 

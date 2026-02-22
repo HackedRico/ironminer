@@ -1,0 +1,14 @@
+{
+    "job_id": "test-001",
+    "site_id": "s1",
+    "frames": [],
+    "zone_analyses": {
+        "Zone A — Ground Level West": "Workers are wearing hard hats, safety vests, and steel-toe boots. The area has been cleared of debris and loose materials. Concrete forms are being set up along the western wall. Rebar is visible and appears to be tied according to structural plans. Electrical cords run along the north edge but are neatly routed and secured with cable covers.",
+        "Zone B — Level 3 East Scaffolding": "Multiple trades are working simultaneously. Some workers appear to be missing safety vests. Loose lumber and debris are scattered on the scaffolding platform. Electrical extension cords are draped across walkways creating tripping hazards. Rebar installation is not visible in this zone."
+    },
+    "entity_relationships": {
+        "Zone A — Ground Level West": "4 workers positioned near formwork on west wall. Crane located 30m to the north. Material staging area is clear of the work zone.",
+        "Zone B — Level 3 East Scaffolding": "9 workers in a confined 400 sq ft area. Electrical crew and plumbing crew overlapping in the same corridor. Staged conduit blocking movement paths."
+    },
+    "metadata": {}
+}

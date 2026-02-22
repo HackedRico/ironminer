@@ -127,7 +127,7 @@ export default function BriefingView({ text, siteId, usingMock }) {
 
   return (
     <div>
-      {/* ── AI Summary ──────────────────────────────────────────────────────── */}
+      {/* ── Summary ──────────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 28 }}>
         {text ? (
           <div style={{
@@ -148,7 +148,7 @@ export default function BriefingView({ text, siteId, usingMock }) {
             borderRadius: 12, padding: '28px 24px', textAlign: 'center',
             color: C.muted, fontSize: 14,
           }}>
-            No AI briefing available yet — upload footage to generate one.
+            No briefing available yet — upload footage to generate one.
           </div>
         )}
       </div>

@@ -1,0 +1,22 @@
+# Install everything the app needs in one go (no strict pins).
+# Use: pip install -r requirements-minimal.txt
+av
+fastapi
+uvicorn
+google-generativeai
+httpx
+livekit-api
+numpy
+python-dotenv
+python-multipart
+pydantic
+postgrest
+PyJWT
+realtime
+requests
+storage3
+supabase
+tenacity
+vastai-sdk
+websockets
+anthropic

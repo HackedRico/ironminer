@@ -1,4 +1,6 @@
 import { useState } from 'react'
+// NEW: full pipeline (one click → safety + productivity). To revert, comment next line and use runSafetyAnalysis + fetchSafetyReport below.
+import { runFullAnalysis } from '../api/pipeline'
 import { runSafetyAnalysis, fetchSafetyReport } from '../api/safety'
 import { severityStyle } from '../utils/colors'
 
@@ -81,10 +83,10 @@ function parseSummary(raw) {
 const SOURCE_CONFIG = {
   backend: { label: '● LIVE — fetched via backend API', color: '#4ADE80' },
   supabase: { label: '● LIVE — fetched directly from Supabase', color: '#60A5FA' },
-  mock: { label: '⚠ OFFLINE — backend and Supabase unavailable, showing embedded mock', color: '#F59E0B' },
+  mock: { label: 'OFFLINE — backend and Supabase unavailable, showing embedded mock', color: '#F59E0B' },
 }
 
-export default function SafetyPanel({ siteId }) {
+export default function SafetyPanel({ siteId, onAnalysisComplete }) {
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -94,6 +96,7 @@ export default function SafetyPanel({ siteId }) {
   // 'backend' | 'supabase' | 'mock' | null
   const [dataSource, setDataSource] = useState(null)
 
+  // ── NEW: full pipeline (summary → safety + productivity). To revert, comment this out and use handleRunOld below. ──
   const handleRun = async () => {
     setLoading(true)
     setError(null)
@@ -101,41 +104,42 @@ export default function SafetyPanel({ siteId }) {
     setDismissed({})
     setDataSource(null)
     try {
-      // ── Path 1: backend is running ──────────────────────────────────────
-      await runSafetyAnalysis(siteId, 'mock_vj_001')
-      const data = await fetchSafetyReport(siteId)
-      setReport(data)
+      const data = await runFullAnalysis(siteId, 'mock_vj_001')
+      setReport(data.safety_report)
       setDataSource('backend')
-    } catch (backendErr) {
-      // ── Path 2: backend down — try Supabase directly ────────────────────
-      let sbErrorMsg = null
-      try {
-        const { fetchSafetyReportFromSupabase } = await import('../lib/supabase')
-        const { data: sbData, error: sbErr } = await fetchSafetyReportFromSupabase(siteId)
-        if (sbData) {
-          setReport(sbData)
-          setDataSource('supabase')
-          return
-        }
-        sbErrorMsg = sbErr || 'No data returned from Supabase'
-        console.warn('[SafetyPanel] Supabase fallback failed:', sbErrorMsg)
-      } catch (sbErr) {
-        sbErrorMsg = sbErr?.message || String(sbErr)
-        console.warn('[SafetyPanel] Supabase fallback threw:', sbErrorMsg)
-      }
-      // ── Path 3: truly offline — use embedded mock ───────────────────────
-      const mock = MOCK_SAFETY_REPORT[siteId]
-      if (mock) {
-        setReport(mock)
-        setDataSource('mock')
-        setSupabaseError(sbErrorMsg)
-      } else {
-        setError('Backend and Supabase both unavailable, and no mock data for this site.')
-      }
+      onAnalysisComplete?.(data)
+    } catch (err) {
+      setError(err?.message || 'Full analysis failed. Is the backend running?')
     } finally {
       setLoading(false)
     }
   }
+
+  // ── OLD: safety-only flow (backend → Supabase → mock). Uncomment and use this in runButton onClick to revert. ──
+  // const handleRunOld = async () => {
+  //   setLoading(true)
+  //   setError(null)
+  //   setSupabaseError(null)
+  //   setDismissed({})
+  //   setDataSource(null)
+  //   try {
+  //     await runSafetyAnalysis(siteId, 'mock_vj_001')
+  //     const data = await fetchSafetyReport(siteId)
+  //     setReport(data)
+  //     setDataSource('backend')
+  //   } catch (backendErr) {
+  //     let sbErrorMsg = null
+  //     try {
+  //       const { fetchSafetyReportFromSupabase } = await import('../lib/supabase')
+  //       const { data: sbData, error: sbErr } = await fetchSafetyReportFromSupabase(siteId)
+  //       if (sbData) { setReport(sbData); setDataSource('supabase'); return }
+  //       sbErrorMsg = sbErr || 'No data returned from Supabase'
+  //     } catch (sbErr) { sbErrorMsg = sbErr?.message || String(sbErr) }
+  //     const mock = MOCK_SAFETY_REPORT[siteId]
+  //     if (mock) { setReport(mock); setDataSource('mock'); setSupabaseError(sbErrorMsg) }
+  //     else setError('Backend and Supabase both unavailable, and no mock data for this site.')
+  //   } finally { setLoading(false) }
+  // }
 
   // ── Run button (always visible) ──────────────────────────────────────────
   const runButton = (
@@ -150,7 +154,7 @@ export default function SafetyPanel({ siteId }) {
         transition: 'all 0.2s', marginBottom: 20,
       }}
     >
-      {loading ? 'Running analysis...' : 'Run Safety Analysis'}
+      {loading ? 'Running full analysis...' : 'Run full analysis'}
     </button>
   )
 
@@ -170,7 +174,7 @@ export default function SafetyPanel({ siteId }) {
       <div>
         {runButton}
         <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>
-          No safety report yet. Click above to run an analysis.
+          No safety report yet. Click above to run full analysis (summary → safety + productivity).
         </div>
       </div>
     )
@@ -291,7 +295,7 @@ export default function SafetyPanel({ siteId }) {
                 padding: '8px 14px', borderRadius: 8,
                 background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
               }}>
-                <span style={{ fontSize: 16 }}>{ok ? '\u2705' : '\u274C'}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: ok ? '#22C55E' : '#64748B' }}>{ok ? 'OK' : '—'}</span>
                 <span style={{ fontSize: 12, color: '#CBD5E1' }}>{zone}</span>
               </div>
             ))}
@@ -312,7 +316,7 @@ export default function SafetyPanel({ siteId }) {
                 padding: '8px 14px', borderRadius: 8,
                 background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
               }}>
-                <span style={{ fontSize: 16 }}>{ok ? '\u2705' : '\u274C'}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: ok ? '#22C55E' : '#64748B' }}>{ok ? 'OK' : '—'}</span>
                 <span style={{ fontSize: 12, color: '#CBD5E1' }}>{zone}</span>
               </div>
             ))}

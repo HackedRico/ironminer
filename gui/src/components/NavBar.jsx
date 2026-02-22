@@ -52,14 +52,6 @@ export default function NavBar({ mode, setMode, urgentCount, totalFrames }) {
               <span style={{ fontSize: 12, fontWeight: 600, color: '#FCA5A5', fontFamily: 'var(--mono)' }}>{urgentCount} urgent</span>
             </div>
           )}
-          {totalFrames > 0 && (
-            <div style={{
-              fontSize: 10, fontFamily: 'var(--mono)', color: '#64748B',
-              background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: 6,
-            }}>
-              {totalFrames} frames analyzed
-            </div>
-          )}
         </div>
       </div>
     </header>

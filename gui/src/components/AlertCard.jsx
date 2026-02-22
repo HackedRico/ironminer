@@ -92,7 +92,7 @@ function TimelineMode({ entry, expanded, onToggle }) {
         )}
       </button>
 
-      {/* Expanded detail: video badge + AI summary */}
+      {/* Expanded detail: video badge + summary */}
       {expanded && hasDetail && (
         <div style={{ padding: '0 16px 14px 38px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {entry.video && (
@@ -111,7 +111,6 @@ function TimelineMode({ entry, expanded, onToggle }) {
               background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.18)',
               fontSize: 12, color: C.greenLight, lineHeight: 1.6,
             }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.green, marginRight: 5, fontFamily: 'var(--mono)' }}>AI</span>
               {entry.ai_summary}
             </div>
           )}

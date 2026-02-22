@@ -55,7 +55,7 @@ export default function ReviewMode() {
         const site = sites.find(s => s.id === selectedSite)
         setZones(site?.zones || [])
       })
-    }
+      }
   }, [selectedSite, usingMock])
 
   const site = sites.find(s => s.id === selectedSite)
@@ -128,13 +128,8 @@ export default function ReviewMode() {
             {/* ── TAB: Briefing ──────────────────────────────────────────── */}
             {tab === 'briefing' && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Today's Briefing</span>
-                  </div>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: '#475569', background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: 4 }}>
-                    AI-generated from {site.frames} frames
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Today's Briefing</span>
                 </div>
                 <BriefingView text={briefing} siteId={selectedSite} usingMock={usingMock} />
               </div>
@@ -163,7 +158,7 @@ export default function ReviewMode() {
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Spatial Alerts</span>
                 </div>
                 <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
-                  AI-detected safety and scheduling issues from uploaded footage. Expand an alert to see details and recommended actions.
+                  Detected safety and scheduling issues from uploaded footage. Expand an alert to see details and recommended actions.
                 </div>
                 {alerts.length === 0
                   ? <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>No alerts for this site. Everything looks good.</div>
@@ -201,9 +196,14 @@ export default function ReviewMode() {
                   </span>
                 </div>
                 <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
-                  Human-in-the-loop safety review. Run AI analysis on video data, review flagged violations, and dismiss false positives before they become alerts.
+                  Human-in-the-loop safety review. Run analysis on video data, review flagged violations, and dismiss false positives before they become alerts.
                 </div>
-                <SafetyPanel siteId={selectedSite} />
+                <SafetyPanel
+                  siteId={selectedSite}
+                  onAnalysisComplete={() => {
+                    if (!usingMock) fetchZones(selectedSite).then(setZones).catch(() => {})
+                  }}
+                />
               </div>
             )}
           </>

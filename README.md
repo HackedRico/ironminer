@@ -84,6 +84,21 @@ The frontend proxies `/api` and `/ws` requests to the backend automatically (con
 
 The frontend works standalone — it falls back to built-in mock data and shows a yellow "DEMO DATA" badge. Useful for UI development without running the API.
 
+### Testing the processing workflow (summary → safety + productivity)
+
+Agents are fed from local **summary.txt** (no Twelve Labs call). To test the full pipeline without touching the frontend:
+
+1. **Start the backend** (e.g. `uvicorn app.main:app --reload --port 8000`).
+2. Run the test script (from repo root):
+   ```bash
+   python scripts/test_processing_workflow.py
+   ```
+   Optional: `--summary-file app/summarizer/summary.txt` (default), or `--base-url http://localhost:8000`.
+3. The script updates the video result for job `mock_vj_001` (site `s1`) with the summary text, runs safety and productivity analysis, and prints both reports.
+4. In the frontend, open site **s1** and click **Run Safety Analysis** (and productivity report if shown) — you’ll see the same data.
+
+No frontend or API contract changes required.
+
 ## Project Structure
 
 ```
