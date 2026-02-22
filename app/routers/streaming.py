@@ -2,8 +2,17 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-from app.models.streaming import FeedConfig, FeedCreate, LiveScanResult, AutoScanRequest, TokenRequest, TokenResponse
+from app.models.streaming import (
+    FeedConfig,
+    FeedCreate,
+    LiveScanResult,
+    AutoscanRequest,
+    TokenRequest,
+    TokenResponse,
+)
+
 from app.services.storage import FEEDS
+
 from app.services.livekit_service import (
     generate_manager_token,
     generate_worker_token,
@@ -11,19 +20,18 @@ from app.services.livekit_service import (
     list_participants,
     livekit_ws_url_for_client,
 )
+
+
 from app.ws.manager import ws_manager
 
 router = APIRouter()
 
-_feed_counter = len(FEEDS)
+_feed_counter = 6  # seed data has 6 feeds
 
 
 @router.get("/feeds", response_model=list[FeedConfig])
 async def list_feeds(site_id: str | None = None):
-    feeds = list(FEEDS.values())
-    if site_id:
-        feeds = [f for f in feeds if f.site_id == site_id]
-    return feeds
+    return await db.get_feeds(site_id)
 
 
 @router.post("/feeds", response_model=FeedConfig)
@@ -39,13 +47,12 @@ async def register_feed(body: FeedCreate):
         worker=body.worker,
         type=body.type,
     )
-    FEEDS[feed_id] = feed
-    return feed
+    return await db.create_feed(feed)
 
 
 @router.get("/feeds/{feed_id}", response_model=FeedConfig)
 async def get_feed(feed_id: str):
-    feed = FEEDS.get(feed_id)
+    feed = await db.get_feed(feed_id)
     if not feed:
         raise HTTPException(404, "Feed not found")
     return feed
@@ -53,7 +60,8 @@ async def get_feed(feed_id: str):
 
 @router.post("/feeds/{feed_id}/scan", response_model=LiveScanResult)
 async def scan_feed(feed_id: str):
-    if feed_id not in FEEDS:
+    feed = await db.get_feed(feed_id)
+    if not feed:
         raise HTTPException(404, "Feed not found")
     # TODO: grab frame from feed, run abbreviated analysis
     return LiveScanResult(
@@ -66,12 +74,11 @@ async def scan_feed(feed_id: str):
 
 @router.post("/feeds/{feed_id}/auto-scan")
 async def toggle_auto_scan(feed_id: str, body: AutoScanRequest):
-    feed = FEEDS.get(feed_id)
+    feed = await db.update_feed(
+        feed_id, {"auto_scan": body.enabled, "scan_interval": body.interval_seconds}
+    )
     if not feed:
         raise HTTPException(404, "Feed not found")
-    feed.auto_scan = body.enabled
-    feed.scan_interval = body.interval_seconds
-    FEEDS[feed_id] = feed
     return {"enabled": feed.auto_scan, "interval_seconds": feed.scan_interval}
 
 

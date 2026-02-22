@@ -6,3 +6,4 @@ dist/
 .env
 uploads/
 data/
+**/*.mp4

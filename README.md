@@ -25,7 +25,7 @@ Results flow into a dashboard with two modes:
 | Frontend | React + Vite |
 | Backend | FastAPI (Python) |
 | AI | Claude API (vision + text) |
-| GPU Processing | vest.ai |
+| GPU Processing | Vast.ai |
 | Live Comms | WebSockets |
 
 ## Quick Start
@@ -51,7 +51,6 @@ cd gui && npm install && cd ..
 
 # Environment variables (optional — mock data works without these)
 cp .env.example .env
-# Add your ANTHROPIC_API_KEY, VESTAI_API_KEY, etc.
 ```
 
 ### Run
