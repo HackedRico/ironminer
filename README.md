@@ -32,7 +32,7 @@ Results flow into a dashboard with two modes:
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.11 (VastAI currently requires `distutils`, which is not available in 3.12+)
 - Node.js 18+
 
 ### Setup
