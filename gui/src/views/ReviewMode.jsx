@@ -53,14 +53,19 @@ export default function ReviewMode() {
       // ── LIVE: fetch from backend API ──
       fetchBriefing(selectedSite).then(b => setBriefing(b.text)).catch(() => setBriefing(null))
       fetchAlerts({ site_id: selectedSite }).then(setAlerts).catch(() => setAlerts([]))
-      fetchProductivityReport(selectedSite)
-        .then(report => { if (report?.zones?.length) setZones(report.zones); else throw new Error('no zones') })
-        .catch(() => {
-          fetchZones(selectedSite).then(setZones).catch(() => {
-            const site = sites.find(s => s.id === selectedSite)
-            setZones(site?.zones || [])
+      const currentSite = sites.find(s => s.id === selectedSite)
+      // Skip productivity fetch for sites with no processed footage (avoids 404 noise)
+      if (currentSite && currentSite.frames === 0 && (!currentSite.zones || currentSite.zones.length === 0)) {
+        setZones([])
+      } else {
+        fetchProductivityReport(selectedSite)
+          .then(report => { if (report?.zones?.length) setZones(report.zones); else throw new Error('no zones') })
+          .catch(() => {
+            fetchZones(selectedSite).then(setZones).catch(() => {
+              setZones(currentSite?.zones || [])
+            })
           })
-        })
+      }
     }
   }, [selectedSite, usingMock])
 
@@ -75,7 +80,6 @@ export default function ReviewMode() {
           const msg = JSON.parse(e.data)
           if (msg.stage === 'video_complete') {
             fetchBriefing(selectedSite).then(b => setBriefing(b.text)).catch(() => {})
-            refreshJobs()
           }
           if (msg.stage === 'productivity_complete') {
             fetchProductivityReport(selectedSite)
@@ -83,7 +87,8 @@ export default function ReviewMode() {
               .catch(() => {})
           }
           if (msg.stage === 'pipeline_complete') {
-            refreshJobs()
+            // Refresh site list so frame counts / hasFootage update
+            fetchSites().then(data => setSites(data)).catch(() => {})
           }
         } catch {}
       }
@@ -254,7 +259,7 @@ export default function ReviewMode() {
                 <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
                   Zone congestion scoring, trade overlap detection, and resource optimization recommendations — auto-generated from video analysis pipeline.
                 </div>
-                <ProductivityPanel siteId={selectedSite} />
+                <ProductivityPanel siteId={selectedSite} hasFootage={site?.frames > 0} />
               </div>
             )}
           </>

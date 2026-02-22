@@ -33,7 +33,7 @@ function parseSummary(raw) {
   return text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
 }
 
-export default function ProductivityPanel({ siteId }) {
+export default function ProductivityPanel({ siteId, hasFootage = true }) {
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(true)
   const [expandedZone, setExpandedZone] = useState(null)
@@ -52,9 +52,10 @@ export default function ProductivityPanel({ siteId }) {
 
   useEffect(() => {
     if (!siteId) return
+    if (!hasFootage) { setLoading(false); setReport(null); return }
     setLoading(true)
     loadReport()
-  }, [siteId])
+  }, [siteId, hasFootage])
 
   // Listen for pipeline updates
   useEffect(() => {
