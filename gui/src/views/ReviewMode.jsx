@@ -5,6 +5,7 @@ import AlertCard from '../components/AlertCard'
 import BriefingView from '../components/BriefingView'
 import MediaGallery from '../components/MediaGallery'
 import AddProjectModal from '../components/AddProjectModal'
+import SiteBIMView from '../components/SiteBIMView'
 import { fetchSites, fetchBriefing, createSite } from '../api/sites'
 import { fetchAlerts } from '../api/alerts'
 import { fetchZones } from '../api/productivity'
@@ -109,16 +110,16 @@ export default function ReviewMode() {
                 <p style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{site.address}</p>
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
-                {['briefing', 'zones', 'alerts', 'media'].map(t => (
+                {['briefing', 'zones', 'alerts', 'media', 'bim'].map(t => (
                   <button key={t} onClick={() => setTab(t)} style={{
                     padding: '8px 18px', borderRadius: 8, border: '1px solid',
                     borderColor: tab === t ? 'rgba(249,115,22,0.3)' : 'rgba(255,255,255,0.06)',
                     background: tab === t ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.02)',
                     cursor: 'pointer', fontSize: 13, fontWeight: tab === t ? 600 : 400,
                     color: tab === t ? '#FB923C' : '#94A3B8', transition: 'all 0.2s',
-                    textTransform: 'capitalize',
+                    textTransform: t === 'bim' ? 'none' : 'capitalize',
                   }}>
-                    {t === 'alerts' ? `Alerts (${alerts.length})` : t}
+                    {t === 'alerts' ? `Alerts (${alerts.length})` : t === 'bim' ? '3D BIM' : t}
                   </button>
                 ))}
               </div>
@@ -185,6 +186,19 @@ export default function ReviewMode() {
                   All video footage uploaded for this site. Click play to review clips, or upload new footage from the Briefing tab.
                 </div>
                 <MediaGallery siteId={selectedSite} usingMock={usingMock} />
+              </div>
+            )}
+
+            {/* ── TAB: 3D BIM ────────────────────────────────────────────── */}
+            {tab === 'bim' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>3D Site Model</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginBottom: 14, padding: '10px 14px', background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.12)', borderRadius: 8, borderLeft: '3px solid rgba(249,115,22,0.4)' }}>
+                  Procedural 3D layout with zone congestion heatmap. Click any zone to inspect workers and trades. Drag to orbit, scroll to zoom.
+                </div>
+                <SiteBIMView zones={zones} siteId={selectedSite} />
               </div>
             )}
           </>
