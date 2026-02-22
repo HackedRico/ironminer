@@ -21,7 +21,7 @@ const TRADE_COLORS = {
  * Used in both the unassigned pool (WorkerPool) and inside team cards.
  * When isDragging, the source card fades to 30% so the drop zone is visible.
  */
-export default function WorkerCard({ worker, compact = false }) {
+export default function WorkerCard({ worker, compact = false, onClick = null }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: worker.id,
     data: { worker },
@@ -34,10 +34,11 @@ export default function WorkerCard({ worker, compact = false }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      onClick={onClick || undefined}
       style={{
         transform: CSS.Translate.toString(transform),
         opacity: isDragging ? 0.3 : 1,
-        cursor: isDragging ? 'grabbing' : 'grab',
+        cursor: isDragging ? 'grabbing' : (onClick ? 'pointer' : 'grab'),
         // Card shell
         display: 'flex',
         alignItems: 'center',

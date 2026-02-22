@@ -19,6 +19,15 @@ const TRADE_COLORS = {
 
 const TEAM_COLORS = ['#F97316','#3B82F6','#8B5CF6','#10B981','#F59E0B','#EC4899','#06B6D4','#84CC16']
 
+function getLiveIdentityForWorker(worker, liveWorkerStreams) {
+  if (!worker || !liveWorkerStreams?.size) return null
+  for (const [identity, stream] of liveWorkerStreams.entries()) {
+    const name = stream?.participant?.name
+    if (name === worker.name || identity === worker.id) return identity
+  }
+  return null
+}
+
 function WorkerRow({ worker, isLive, selected, onClick }) {
   const tradeColor = TRADE_COLORS[worker.trade] || '#64748B'
   return (
@@ -26,34 +35,49 @@ function WorkerRow({ worker, isLive, selected, onClick }) {
       onClick={onClick}
       style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 6px', background: selected ? 'rgba(249,115,22,0.07)' : 'none',
-        border: 'none', borderRadius: 7, cursor: 'pointer',
-        textAlign: 'left', transition: 'background 0.15s',
+        padding: '7px 10px',
+        background: selected ? 'rgba(255,255,255,0.04)' : 'transparent',
+        border: selected ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent',
+        borderRadius: 8, cursor: 'pointer',
+        textAlign: 'left', transition: 'background 0.12s, border-color 0.12s',
+        marginBottom: 2,
       }}
+      onMouseOver={e => { if (!selected) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+      onMouseOut={e =>  { if (!selected) e.currentTarget.style.background = 'transparent' }}
     >
+      {/* Live indicator dot */}
       <div style={{
         width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-        background: isLive ? '#22C55E' : 'rgba(255,255,255,0.12)',
-        boxShadow: isLive ? '0 0 6px #22C55E' : 'none',
+        background: isLive ? '#22C55E' : 'rgba(255,255,255,0.1)',
+        boxShadow: isLive ? '0 0 8px rgba(34,197,94,0.6)' : 'none',
         transition: 'background 0.2s',
       }} />
-      <span style={{ fontSize: 13, fontWeight: 500, color: '#cbd5e1', flex: 1, letterSpacing: '-0.01em' }}>
+
+      {/* Name — slightly darker than Teams for Live list */}
+      <span style={{
+        fontSize: 13, fontWeight: selected ? 600 : 400,
+        color: '#cbd5e1',
+        flex: 1, letterSpacing: '-0.01em',
+        transition: 'color 0.12s',
+      }}>
         {worker.name}
       </span>
-      <span style={{
-        fontSize: 9, fontWeight: 700, fontFamily: 'var(--mono)',
-        color: tradeColor, background: `${tradeColor}18`,
-        padding: '2px 6px', borderRadius: 4, flexShrink: 0,
-        letterSpacing: '0.05em',
-      }}>
-        {worker.trade.toUpperCase()}
-      </span>
-      {isLive && (
+
+      {/* Trade label — only if live (to reduce noise) */}
+      {isLive ? (
         <span style={{
-          fontSize: 9, fontWeight: 700, fontFamily: 'var(--mono)',
-          color: '#86EFAC', letterSpacing: '0.1em',
+          fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 700,
+          color: '#22C55E', letterSpacing: '0.1em',
         }}>
           LIVE
+        </span>
+      ) : (
+        <span style={{
+          fontSize: 9, fontFamily: 'var(--mono)',
+          color: `${tradeColor}99`,
+          letterSpacing: '0.02em',
+        }}>
+          {worker.trade}
         </span>
       )}
     </button>
@@ -62,41 +86,60 @@ function WorkerRow({ worker, isLive, selected, onClick }) {
 
 function TeamSection({ team, workers, liveWorkerStreams, selectedWorkerIdentity, onSelectWorker }) {
   const color = TEAM_COLORS[team.color_index % 8]
+  const liveCount = workers.filter(w => getLiveIdentityForWorker(w, liveWorkerStreams)).length
+
   return (
-    <div style={{ marginBottom: 20 }}>
+    <div style={{ marginBottom: 18 }}>
+      {/* Section header */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 7,
-        paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.05)',
-        marginBottom: 2,
+        display: 'flex', alignItems: 'center', gap: 6,
+        marginBottom: 4, paddingLeft: 2,
       }}>
-        <div style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0 }} />
+        <div style={{
+          width: 3, height: 14, borderRadius: 2,
+          background: color, flexShrink: 0,
+        }} />
         <span style={{
-          fontSize: 10, fontWeight: 700, fontFamily: 'var(--mono)',
-          color: '#475569', letterSpacing: '0.1em', textTransform: 'uppercase',
+          fontSize: 10, fontWeight: 600, fontFamily: 'var(--mono)',
+          color: '#64748b', letterSpacing: '0.08em', textTransform: 'uppercase', flex: 1,
         }}>
           {team.name}
         </span>
-        {team.task && (
+        {liveCount > 0 && (
           <span style={{
-            fontSize: 10, color: '#334155', marginLeft: 'auto',
-            maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontSize: 9, fontFamily: 'var(--mono)', color: '#22C55E',
+            background: 'rgba(34,197,94,0.1)', padding: '1px 6px', borderRadius: 3,
           }}>
-            {team.task}
+            {liveCount} live
           </span>
         )}
       </div>
+
+      {team.task && (
+        <div style={{
+          fontSize: 10, color: '#334155', paddingLeft: 11,
+          marginBottom: 6, fontStyle: 'italic',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {team.task}
+        </div>
+      )}
+
       {workers.length === 0 ? (
-        <div style={{ fontSize: 11, color: '#334155', padding: '8px 6px' }}>No workers assigned</div>
+        <div style={{ fontSize: 11, color: '#334155', padding: '6px 10px' }}>No workers assigned</div>
       ) : (
-        workers.map(w => (
-          <WorkerRow
-            key={w.id}
-            worker={w}
-            isLive={liveWorkerStreams.has(w.id)}
-            selected={selectedWorkerIdentity === w.id}
-            onClick={() => onSelectWorker(w.id)}
-          />
-        ))
+        workers.map(w => {
+          const liveId = getLiveIdentityForWorker(w, liveWorkerStreams)
+          return (
+            <WorkerRow
+              key={w.id}
+              worker={w}
+              isLive={!!liveId}
+              selected={liveId === selectedWorkerIdentity}
+              onClick={() => onSelectWorker(liveId ?? null)}
+            />
+          )
+        })
       )}
     </div>
   )
@@ -111,7 +154,6 @@ export default function LiveMode() {
   const [liveWorkerStreams, setLiveWorkerStreams] = useState(new Map())
   const [selectedWorkerIdentity, setSelectedWorkerIdentity] = useState(null)
 
-  // Roster
   const [tab, setTab] = useState('all')
   const [selectedSite, setSelectedSite] = useState(null)
   const [siteWorkers, setSiteWorkers] = useState([])
@@ -121,32 +163,18 @@ export default function LiveMode() {
 
   useEffect(() => {
     fetchFeeds()
-      .then(data => {
-        setFeeds(data)
-        if (data.length && !selectedFeed) setSelectedFeed(data[0].id)
-      })
-      .catch(() => {
-        setUsingMock(true)
-        setFeeds(MOCK_FEEDS)
-        setSelectedFeed(MOCK_FEEDS[0].id)
-      })
+      .then(data => { setFeeds(data); if (data.length && !selectedFeed) setSelectedFeed(data[0].id) })
+      .catch(() => { setUsingMock(true); setFeeds(MOCK_FEEDS); setSelectedFeed(MOCK_FEEDS[0].id) })
 
     fetchSites()
-      .then(data => {
-        setSites(data)
-        if (data.length) setSelectedSite(data[0].id)
-      })
-      .catch(() => {
-        setSites(MOCK_SITES)
-        setSelectedSite(MOCK_SITES[0].id)
-      })
+      .then(data => { setSites(data); if (data.length) setSelectedSite(data[0].id) })
+      .catch(() => { setSites(MOCK_SITES); setSelectedSite(MOCK_SITES[0].id) })
 
     fetch('/api/streaming/livekit/rooms', { signal: AbortSignal.timeout(2000) })
       .then(r => setLivekitAvailable(r.ok))
       .catch(() => setLivekitAvailable(false))
   }, [])
 
-  // Load workers + teams for sidebar
   useEffect(() => {
     if (!selectedSite) return
     fetchSiteWorkers(selectedSite)
@@ -159,15 +187,13 @@ export default function LiveMode() {
 
   const feed = feeds.find(f => f.id === selectedFeed)
   const site = feed ? sites.find(s => s.id === feed.site_id) || null : null
-
-  // Workers in teams tab
   const assignedIds = new Set(siteTeams.flatMap(t => t.worker_ids))
   const unassignedWorkers = siteWorkers.filter(w => !assignedIds.has(w.id))
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 20 }}>
 
-      {/* ── Main feed viewer ───────────────────────────────────────────────── */}
+      {/* ── Main feed ──────────────────────────────────────────────────────── */}
       <div>
         {livekitAvailable ? (
           <LiveStreamView
@@ -179,108 +205,185 @@ export default function LiveMode() {
           />
         ) : (
           <>
+            {/* Video placeholder */}
             <div style={{
               aspectRatio: '16/9', borderRadius: 14, overflow: 'hidden',
-              border: '2px solid rgba(249,115,22,0.18)', background: '#0C0F14',
-              position: 'relative', marginBottom: 16,
+              background: '#080B10',
+              border: '1px solid rgba(255,255,255,0.06)',
+              position: 'relative', marginBottom: 12,
             }}>
-              <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(255,255,255,0.008) 1px, rgba(255,255,255,0.008) 2px)' }} />
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 6 }}>
-                <div style={{ fontSize: 13, color: '#334155' }}>
-                  {selectedWorkerIdentity ? `Viewing ${selectedWorkerIdentity}` : 'Select a worker to view their stream'}
+              {/* Subtle dot grid */}
+              <div style={{
+                position: 'absolute', inset: 0, pointerEvents: 'none',
+                backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
+                backgroundSize: '24px 24px',
+              }} />
+
+              {/* Center content */}
+              <div style={{
+                position: 'absolute', inset: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8,
+              }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: '50%',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <rect x="9" y="2" width="6" height="12" rx="3" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5"/>
+                    <path d="M5 10a7 7 0 0 0 14 0" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round"/>
+                    <line x1="12" y1="19" x2="12" y2="22" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </div>
+                <div style={{ fontSize: 12, color: '#334155', fontFamily: 'var(--mono)' }}>
+                  {selectedWorkerIdentity ? selectedWorkerIdentity : 'No stream selected'}
                 </div>
               </div>
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(rgba(0,0,0,0.6), transparent)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#EF4444', animation: 'pulse 1.5s infinite' }} />
-                  <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--mono)', color: '#FCA5A5', letterSpacing: '0.1em' }}>LIVE</span>
-                </div>
-                <span style={{ fontSize: 9, fontFamily: 'var(--mono)', color: '#475569' }}>
-                  {usingMock ? 'DEMO DATA' : 'LIVEKIT OFFLINE'}
+
+              {/* Top-left badges */}
+              <div style={{
+                position: 'absolute', top: 12, left: 14,
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF4444', animation: 'pulse 1.5s infinite' }} />
+                <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--mono)', color: '#FCA5A5', letterSpacing: '0.1em' }}>LIVE</span>
+              </div>
+
+              {/* Top-right status */}
+              <div style={{ position: 'absolute', top: 12, right: 14 }}>
+                <span style={{
+                  fontSize: 9, fontFamily: 'var(--mono)', color: '#334155',
+                  background: 'rgba(0,0,0,0.4)', padding: '3px 8px', borderRadius: 4,
+                  letterSpacing: '0.06em',
+                }}>
+                  {usingMock ? 'DEMO' : 'OFFLINE'}
                 </span>
               </div>
             </div>
 
-            {/* Comms bar */}
+            {/* Icon control bar (Snapshot + Flag; mic disabled when LiveKit off) */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)',
-              borderRadius: 12, padding: '12px 20px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              marginBottom: 12,
             }}>
-              <button style={{
-                width: 42, height: 42, borderRadius: '50%', border: 'none', flexShrink: 0,
-                background: 'linear-gradient(135deg, #F97316, #EA580C)', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 14px rgba(249,115,22,0.25)',
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <rect x="9" y="2" width="6" height="12" rx="3" fill="white" />
-                  <path d="M5 10a7 7 0 0 0 14 0" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                  <line x1="12" y1="19" x2="12" y2="22" stroke="white" strokeWidth="2" strokeLinecap="round" />
+              <button
+                disabled
+                title="Connect to enable"
+                style={{
+                  width: 44, height: 44, borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'rgba(255,255,255,0.04)', cursor: 'not-allowed',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#475569', opacity: 0.6,
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
                 </svg>
               </button>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>Site broadcast</div>
-                <div style={{ fontSize: 11, color: '#475569' }}>Start LiveKit to enable real audio</div>
-              </div>
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                <button style={{
-                  padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)',
-                  background: 'none', cursor: 'pointer', fontSize: 12, color: '#64748B',
-                }}>Snapshot</button>
-                <button style={{
-                  padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.15)',
-                  background: 'rgba(239,68,68,0.06)', cursor: 'pointer', fontSize: 12, color: '#FCA5A5',
-                }}>Flag Issue</button>
-              </div>
+              <button
+                title="Snapshot"
+                style={{
+                  width: 44, height: 44, borderRadius: 10,
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'rgba(255,255,255,0.06)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#94a3b8',
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              </button>
+              <button
+                title="Flag issue"
+                style={{
+                  width: 44, height: 44, borderRadius: 10,
+                  border: '1px solid rgba(239,68,68,0.25)',
+                  background: 'rgba(239,68,68,0.12)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#FCA5A5',
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                  <line x1="4" y1="22" x2="4" y2="15" />
+                </svg>
+              </button>
             </div>
           </>
         )}
       </div>
 
-      {/* ── Right sidebar: Worker roster ───────────────────────────────────── */}
+      {/* ── Sidebar ────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
-        {/* Tab bar + site selector */}
+        {/* Tab bar */}
         <div style={{
           display: 'flex', alignItems: 'center',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
-          marginBottom: 12, paddingBottom: 0,
+          marginBottom: 14,
         }}>
-          {[['all', `All  ${siteWorkers.length}`], ['teams', 'Teams']].map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: '8px 14px 10px 0',
-              fontSize: 12, fontWeight: tab === id ? 600 : 400,
-              color: tab === id ? '#f1f5f9' : '#475569',
-              borderBottom: `2px solid ${tab === id ? '#F97316' : 'transparent'}`,
-              marginBottom: -1,
-              fontFamily: 'inherit', transition: 'color 0.15s',
-            }}>
-              {label}
-            </button>
-          ))}
+          {[['all', `All · ${siteWorkers.length}`], ['teams', 'Teams']].map(([id, label]) => {
+            const active = tab === id
+            return (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                style={{
+                  padding: '10px 14px 12px',
+                  marginBottom: -1,
+                  border: 'none', background: 'none',
+                  cursor: 'pointer', position: 'relative',
+                  font: 'inherit', fontSize: 12,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? '#f1f5f9' : '#475569',
+                  transition: 'color 0.15s',
+                  letterSpacing: active ? '-0.01em' : '0',
+                }}
+              >
+                {label}
+                {active && (
+                  <span style={{
+                    position: 'absolute', bottom: 0,
+                    left: '50%', transform: 'translateX(-50%)',
+                    width: 'calc(100% - 16px)', maxWidth: 48,
+                    height: 2, background: '#D97706', borderRadius: 1,
+                  }} />
+                )}
+              </button>
+            )
+          })}
           <select
+            className="select-dark"
             value={selectedSite || ''}
             onChange={e => setSelectedSite(e.target.value)}
             style={{
-              marginLeft: 'auto', background: 'transparent',
-              border: 'none', outline: 'none', cursor: 'pointer',
-              fontSize: 10, color: '#475569', fontFamily: 'inherit',
-              colorScheme: 'dark', maxWidth: 110,
+              marginLeft: 'auto',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 6,
+              padding: '6px 8px',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              maxWidth: 120,
             }}
           >
             {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
 
-        {/* Live worker streams (LiveKit only) */}
+        {/* Live Now strip */}
         {liveWorkerStreams.size > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: '#22C55E', letterSpacing: '0.12em', marginBottom: 8, paddingLeft: 6 }}>
-              LIVE NOW  {liveWorkerStreams.size}
+          <div style={{ marginBottom: 18 }}>
+            <div style={{
+              fontSize: 9, fontFamily: 'var(--mono)', color: '#22C55E',
+              letterSpacing: '0.12em', marginBottom: 8,
+            }}>
+              LIVE NOW  ·  {liveWorkerStreams.size}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
               {Array.from(liveWorkerStreams.entries()).map(([identity, stream]) => (
                 <LiveWorkerFeedCard
                   key={identity}
@@ -292,7 +395,7 @@ export default function LiveMode() {
                 />
               ))}
             </div>
-            <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '16px 0 4px' }} />
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.04)', margin: '14px 0 0' }} />
           </div>
         )}
 
@@ -300,17 +403,22 @@ export default function LiveMode() {
         <div style={{ overflowY: 'auto', flex: 1, maxHeight: 'calc(100vh - 220px)' }}>
           {tab === 'all' ? (
             siteWorkers.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#334155', textAlign: 'center', padding: '48px 0' }}>No workers</div>
+              <div style={{ fontSize: 12, color: '#334155', textAlign: 'center', padding: '48px 0' }}>
+                No workers
+              </div>
             ) : (
-              siteWorkers.map(w => (
-                <WorkerRow
-                  key={w.id}
-                  worker={w}
-                  isLive={liveWorkerStreams.has(w.id)}
-                  selected={selectedWorkerIdentity === w.id}
-                  onClick={() => setSelectedWorkerIdentity(w.id)}
-                />
-              ))
+              siteWorkers.map(w => {
+                const liveId = getLiveIdentityForWorker(w, liveWorkerStreams)
+                return (
+                  <WorkerRow
+                    key={w.id}
+                    worker={w}
+                    isLive={!!liveId}
+                    selected={liveId === selectedWorkerIdentity}
+                    onClick={() => setSelectedWorkerIdentity(liveId ?? null)}
+                  />
+                )
+              })
             )
           ) : (
             siteTeams.length === 0 ? (
@@ -330,28 +438,28 @@ export default function LiveMode() {
                   />
                 ))}
                 {unassignedWorkers.length > 0 && (
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 7,
-                      paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 2,
-                    }}>
-                      <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#334155', flexShrink: 0 }} />
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, paddingLeft: 2 }}>
+                      <div style={{ width: 3, height: 14, borderRadius: 2, background: '#1e293b', flexShrink: 0 }} />
                       <span style={{
-                        fontSize: 10, fontWeight: 700, fontFamily: 'var(--mono)',
-                        color: '#334155', letterSpacing: '0.1em', textTransform: 'uppercase',
+                        fontSize: 10, fontWeight: 600, fontFamily: 'var(--mono)',
+                        color: '#334155', letterSpacing: '0.08em', textTransform: 'uppercase',
                       }}>
                         Unassigned
                       </span>
                     </div>
-                    {unassignedWorkers.map(w => (
-                      <WorkerRow
-                        key={w.id}
-                        worker={w}
-                        isLive={liveWorkerStreams.has(w.id)}
-                        selected={selectedWorkerIdentity === w.id}
-                        onClick={() => setSelectedWorkerIdentity(w.id)}
-                      />
-                    ))}
+                    {unassignedWorkers.map(w => {
+                      const liveId = getLiveIdentityForWorker(w, liveWorkerStreams)
+                      return (
+                        <WorkerRow
+                          key={w.id}
+                          worker={w}
+                          isLive={!!liveId}
+                          selected={liveId === selectedWorkerIdentity}
+                          onClick={() => setSelectedWorkerIdentity(liveId ?? null)}
+                        />
+                      )
+                    })}
                   </div>
                 )}
               </>

@@ -14,6 +14,7 @@ Files:
 """
 import json
 import uuid
+from datetime import date as date_type, timedelta
 from pathlib import Path
 from app.models.teams import SiteWorker, Team, TeamCreate, TeamUpdate
 
@@ -196,3 +197,182 @@ def delete_team(team_id: str) -> bool:
     del TEAMS[team_id]
     _save_teams()
     return True
+
+
+# ── Worker history ─────────────────────────────────────────────────────────────
+
+def get_worker_history(worker_id: str, site_id: str, days: int = 7) -> dict | None:
+    """Return 7-day assignment history + alert correlation + performance signals."""
+    worker = SITE_WORKERS.get(worker_id)
+    if not worker or worker.site_id != site_id:
+        return None
+
+    today = date_type.today()
+    dates = [str(today - timedelta(days=i)) for i in range(days)]  # newest first
+
+    from app.services.storage import ALERTS  # local import avoids circular risk
+    site_alerts = [a for a in ALERTS.values() if a.site_id == site_id]
+
+    history = []
+    for d in dates:
+        day_teams = [t for t in TEAMS.values()
+                     if t.site_id == site_id and t.date == d and worker_id in t.worker_ids]
+        t = day_teams[0] if day_teams else None
+        team_name = t.name if t else ""
+        zone      = t.zone if t else ""
+        task      = t.task if t else ""
+        zone_prefix = zone.split("—")[0].strip() if zone else ""
+
+        day_alerts = []
+        for a in site_alerts:
+            if a.created_at.date().isoformat() != d:
+                continue
+            if zone_prefix and (zone_prefix.lower() in a.title.lower()
+                                or zone_prefix.lower() in a.detail.lower()):
+                day_alerts.append(a)
+
+        history.append({
+            "date": d, "team_name": team_name, "zone": zone, "task": task,
+            "alert_count": len(day_alerts),
+            "alerts": [{"id": a.id, "severity": a.severity,
+                         "title": a.title, "source_agent": a.source_agent}
+                        for a in day_alerts],
+        })
+
+    flat       = [a for h in history for a in h["alerts"]]
+    total      = len(flat)
+    safety     = sum(1 for a in flat if a["source_agent"] == "safety")
+    prod       = sum(1 for a in flat if a["source_agent"] == "productivity")
+    assigned   = sum(1 for h in history if h["team_name"])
+
+    if total <= 1 and assigned >= 3:
+        flag = "reward"
+    elif safety >= 2 or total >= 3:
+        flag = "needs_training"
+    else:
+        flag = "neutral"
+
+    return {
+        "worker": worker.model_dump(),
+        "history": history,
+        "signals": {"days_assigned": assigned, "total_alerts": total,
+                    "safety_alerts": safety, "productivity_alerts": prod, "flag": flag},
+    }
+
+
+# ── Auto-assign ────────────────────────────────────────────────────────────────
+
+async def auto_assign_workers(site_id: str, date: str, team_id: str | None = None) -> dict:
+    """Use Claude to suggest team assignments for unassigned workers.
+
+    If team_id is set, only suggest for that team (must be empty). Otherwise
+    suggest for all empty teams. Falls back to trade-matching if the API is unavailable.
+    """
+    from app.agents.team_planner_agent import TeamPlannerAgent
+
+    all_workers = {w.id: w for w in get_site_workers(site_id)}
+    today_teams = get_teams(site_id, date)
+    assigned_ids = {wid for t in today_teams for wid in t.worker_ids}
+    unassigned = [w for w in all_workers.values() if w.id not in assigned_ids]
+
+    # Only target empty teams; optionally restrict to a single team (e.g. newly created)
+    if team_id:
+        empty_teams = [t for t in today_teams if t.id == team_id and not t.worker_ids]
+    else:
+        empty_teams = [t for t in today_teams if not t.worker_ids]
+
+    if not unassigned or not empty_teams:
+        return {
+            "assignments": [],
+            "unassigned_worker_ids": [w.id for w in unassigned],
+            "summary": "Nothing to assign — no unassigned workers or no empty teams exist.",
+            "used_ai": False,
+        }
+
+    # Lightweight signals for each unassigned worker (reuses get_worker_history)
+    worker_contexts = []
+    for w in unassigned:
+        hist = get_worker_history(w.id, site_id, days=7)
+        sig = (
+            hist["signals"]
+            if hist
+            else {"days_assigned": 0, "total_alerts": 0, "flag": "neutral"}
+        )
+        worker_contexts.append({
+            "id": w.id, "name": w.name, "trade": w.trade,
+            "flag": sig["flag"],
+            "days_assigned": sig["days_assigned"],
+            "total_alerts": sig["total_alerts"],
+        })
+
+    team_contexts = [
+        {"id": t.id, "name": t.name, "task": t.task, "zone": t.zone, "assigned_trades": []}
+        for t in empty_teams
+    ]
+
+    agent = TeamPlannerAgent()
+    try:
+        plan = await agent.process(worker_contexts, team_contexts)
+        team_map = {t.id: t.name for t in today_teams}
+        # Normalize LLM response (may return worker_id/team_id or workerId/teamId)
+        assignments = []
+        for a in plan.get("assignments", []):
+            wid = a.get("worker_id") or a.get("workerId")
+            tid = a.get("team_id") or a.get("teamId")
+            if wid in all_workers and tid in team_map:
+                assignments.append({
+                    "worker_id": wid,
+                    "worker_name": all_workers[wid].name,
+                    "team_id": tid,
+                    "team_name": team_map[tid],
+                    "reason": a.get("reason", ""),
+                })
+        return {
+            "assignments": assignments,
+            "unassigned_worker_ids": plan.get("unassigned_worker_ids", []),
+            "summary": plan.get("summary", ""),
+            "used_ai": True,
+        }
+    except Exception:
+        # Fallback: assign multiple workers per team (trade-match when possible)
+        # Target ~2+ workers per team; spread workers across teams
+        assignments: list[dict] = []
+        assigned_wids: set[str] = set()
+        workers_per_team = max(2, len(worker_contexts) // max(1, len(team_contexts)))
+        for t in team_contexts:
+            count = 0
+            for w in worker_contexts:
+                if w["id"] in assigned_wids:
+                    continue
+                if count >= workers_per_team:
+                    break
+                if not t["assigned_trades"] or w["trade"] in t["assigned_trades"]:
+                    assignments.append({
+                        "worker_id": w["id"], "worker_name": w["name"],
+                        "team_id": t["id"], "team_name": t["name"],
+                        "reason": "Trade match (AI unavailable)",
+                    })
+                    assigned_wids.add(w["id"])
+                    count += 1
+        # Assign any remaining workers to teams that are under target
+        for w in worker_contexts:
+            if w["id"] in assigned_wids:
+                continue
+            for t in team_contexts:
+                current = sum(1 for a in assignments if a["team_id"] == t["id"])
+                if current < workers_per_team:
+                    assignments.append({
+                        "worker_id": w["id"], "worker_name": w["name"],
+                        "team_id": t["id"], "team_name": t["name"],
+                        "reason": "Trade match (AI unavailable)",
+                    })
+                    assigned_wids.add(w["id"])
+                    break
+        return {
+            "assignments": assignments,
+            "unassigned_worker_ids": [
+                w["id"] for w in worker_contexts if w["id"] not in assigned_wids
+            ],
+            "summary": "AI unavailable — assigned by trade match only.",
+            "used_ai": False,
+        }

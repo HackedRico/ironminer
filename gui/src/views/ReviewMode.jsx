@@ -153,26 +153,54 @@ export default function ReviewMode() {
       <div className="anim-in anim-d2">
         {site && (
           <>
-            {/* Site header + tab buttons */}
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20 }}>
+            {/* Site header + tab buttons (same aesthetic as main nav) */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div>
                 <h2 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: '#F8FAFC' }}>{site.name}</h2>
-                <p style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{site.address}</p>
               </div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {['briefing', 'zones', 'alerts', 'media', 'bim', 'safety', 'productivity'].map(t => (
-                  <button key={t} onClick={() => setTab(t)} style={{
-                    padding: '8px 18px', borderRadius: 8, border: '1px solid',
-                    borderColor: tab === t ? 'rgba(249,115,22,0.3)' : 'rgba(255,255,255,0.06)',
-                    background: tab === t ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.02)',
-                    cursor: 'pointer', fontSize: 13, fontWeight: tab === t ? 600 : 400,
-                    color: tab === t ? '#FB923C' : '#94A3B8', transition: 'all 0.2s',
-                    textTransform: (t === 'bim' || t === 'safety') ? 'none' : 'capitalize',
-                  }}>
-                    {t === 'alerts' ? `Alerts (${alerts.length})` : t === 'bim' ? '3D BIM' : t === 'safety' ? 'Safety' : t}
-                  </button>
-                ))}
-              </div>
+              <nav style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                {['briefing', 'zones', 'alerts', 'media', 'bim', 'safety', 'productivity'].map(t => {
+                  const active = tab === t
+                  const label = t === 'alerts' ? 'Alerts' : t === 'bim' ? '3D' : t === 'safety' ? 'Safety' : t
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setTab(t)}
+                      style={{
+                        padding: '10px 14px 12px',
+                        marginBottom: -1,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        font: 'inherit',
+                        fontSize: 13,
+                        fontWeight: active ? 600 : 400,
+                        color: active ? '#F8FAFC' : '#64748B',
+                        transition: 'color 0.2s',
+                        textTransform: (t === 'bim' || t === 'safety') ? 'none' : 'capitalize',
+                      }}
+                    >
+                      {label}
+                      {active && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            width: 'calc(100% - 12px)',
+                            maxWidth: 72,
+                            height: 2,
+                            background: '#D97706',
+                            borderRadius: 1,
+                          }}
+                        />
+                      )}
+                    </button>
+                  )
+                })}
+              </nav>
             </div>
 
             {/* ── TAB: Briefing ──────────────────────────────────────────── */}

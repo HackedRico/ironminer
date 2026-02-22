@@ -29,3 +29,41 @@ class TeamUpdate(BaseModel):
     task: str | None = None
     zone: str | None = None
     worker_ids: list[str] | None = None
+
+
+class DayHistory(BaseModel):
+    date: str
+    team_name: str
+    zone: str
+    task: str
+    alert_count: int
+    alerts: list[dict]   # [{id, severity, title, source_agent}]
+
+
+class WorkerSignals(BaseModel):
+    days_assigned: int
+    total_alerts: int
+    safety_alerts: int
+    productivity_alerts: int
+    flag: str            # "reward" | "needs_training" | "neutral"
+
+
+class WorkerHistoryResponse(BaseModel):
+    worker: SiteWorker
+    history: list[DayHistory]   # newest first
+    signals: WorkerSignals
+
+
+class AssignmentSuggestion(BaseModel):
+    worker_id: str
+    worker_name: str
+    team_id: str
+    team_name: str
+    reason: str          # one sentence from Claude
+
+
+class AutoAssignResponse(BaseModel):
+    assignments: list[AssignmentSuggestion]
+    unassigned_worker_ids: list[str]
+    summary: str
+    used_ai: bool        # False if Claude unavailable (fallback mode)

@@ -10,10 +10,18 @@ import os
 import subprocess
 import tempfile
 
-import av
-import numpy as np
-
 logger = logging.getLogger(__name__)
+
+# av and numpy are optional — only needed for frame-extraction functions.
+# Import lazily so the backend starts without them installed.
+try:
+    import av as _av
+    import numpy as _np
+    _AV_AVAILABLE = True
+except ImportError:
+    _av = None
+    _np = None
+    _AV_AVAILABLE = False
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
@@ -75,9 +83,11 @@ def split_video(video_path: str, chunk_seconds: float, output_dir: str | None = 
     return chunks
 
 
-def read_video(video_path: str, max_frames: int = 8) -> np.ndarray:
+def read_video(video_path: str, max_frames: int = 8):
     """Decode video and uniformly sample max_frames frames. Returns (N, H, W, 3) uint8."""
-    container = av.open(video_path)
+    if not _AV_AVAILABLE:
+        raise RuntimeError("av and numpy are required for read_video. Run: pip install av numpy")
+    container = _av.open(video_path)
     frames = [f.to_ndarray(format="rgb24") for f in container.decode(video=0)]
     container.close()
 
@@ -85,13 +95,15 @@ def read_video(video_path: str, max_frames: int = 8) -> np.ndarray:
         raise ValueError(f"No frames decoded from {video_path}")
 
     total = len(frames)
-    indices = np.linspace(0, total - 1, min(max_frames, total), dtype=int)
-    return np.stack([frames[i] for i in indices])
+    indices = _np.linspace(0, total - 1, min(max_frames, total), dtype=int)
+    return _np.stack([frames[i] for i in indices])
 
 
 def grab_thumbnail(video_path: str) -> str:
     """Return base64 JPEG of the mid-point frame."""
-    container = av.open(video_path)
+    if not _AV_AVAILABLE:
+        return ""
+    container = _av.open(video_path)
     frames = []
     for frame in container.decode(video=0):
         frames.append(frame)

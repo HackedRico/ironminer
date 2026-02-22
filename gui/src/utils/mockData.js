@@ -311,3 +311,57 @@ export async function isBackendAvailable() {
   }
   return _backendAvailable
 }
+
+// ── WORKER HISTORY ────────────────────────────────────────────────────────────
+// Endpoint: GET /api/teams/workers/{id}/history?site_id=s1&days=7
+// Keyed by worker_id. Three examples covering all three signal flags.
+
+function _isoDay(n) {
+  const d = new Date(); d.setDate(d.getDate() - n)
+  return d.toISOString().split('T')[0]
+}
+
+export const MOCK_WORKER_HISTORY = {
+  // K. Johnson — Electrical — reward (≤1 alert, ≥3 days assigned)
+  'w_s1_06': {
+    worker: { id: 'w_s1_06', name: 'K. Johnson', trade: 'Electrical', site_id: 's1' },
+    history: [
+      { date: _isoDay(0), team_name: 'Electrical Team', zone: 'Zone B — Level 3 East Scaffolding', task: 'Panel installation', alert_count: 0, alerts: [] },
+      { date: _isoDay(1), team_name: 'Electrical Team', zone: 'Zone B — Level 3 East Scaffolding', task: 'Panel installation', alert_count: 0, alerts: [] },
+      { date: _isoDay(2), team_name: 'Electrical Team', zone: 'Zone E — Level 2 Interior',         task: 'Conduit run',        alert_count: 0, alerts: [] },
+      { date: _isoDay(3), team_name: 'Electrical Team', zone: 'Zone E — Level 2 Interior',         task: 'Conduit run',        alert_count: 0, alerts: [] },
+      { date: _isoDay(4), team_name: '',                zone: '',                                   task: '',                   alert_count: 0, alerts: [] },
+      { date: _isoDay(5), team_name: 'Electrical Team', zone: 'Zone B — Level 3 East Scaffolding', task: 'Rough-in wiring',    alert_count: 0, alerts: [] },
+      { date: _isoDay(6), team_name: 'Electrical Team', zone: 'Zone B — Level 3 East Scaffolding', task: 'Rough-in wiring',    alert_count: 0, alerts: [] },
+    ],
+    signals: { days_assigned: 6, total_alerts: 0, safety_alerts: 0, productivity_alerts: 0, flag: 'reward' },
+  },
+  // R. Chen — Framing — needs_training (≥2 safety alerts)
+  'w_s1_14': {
+    worker: { id: 'w_s1_14', name: 'R. Chen', trade: 'Framing', site_id: 's1' },
+    history: [
+      { date: _isoDay(0), team_name: 'Framing Crew', zone: 'Zone C — North Exterior',          task: 'Sheathing',    alert_count: 1, alerts: [{ id: 'a_002', severity: 'high',   title: 'No hard hats near crane swing radius', source_agent: 'safety' }] },
+      { date: _isoDay(1), team_name: 'Framing Crew', zone: 'Zone C — North Exterior',          task: 'Sheathing',    alert_count: 1, alerts: [{ id: 'a_002', severity: 'high',   title: 'No hard hats near crane swing radius', source_agent: 'safety' }] },
+      { date: _isoDay(2), team_name: 'Framing Crew', zone: 'Zone B — Level 3 East Scaffolding',task: 'Wall framing', alert_count: 1, alerts: [{ id: 'a_001', severity: 'high',   title: '3 trades stacked in Zone B',          source_agent: 'productivity' }] },
+      { date: _isoDay(3), team_name: 'Framing Crew', zone: 'Zone B — Level 3 East Scaffolding',task: 'Wall framing', alert_count: 0, alerts: [] },
+      { date: _isoDay(4), team_name: '',              zone: '',                                  task: '',            alert_count: 0, alerts: [] },
+      { date: _isoDay(5), team_name: 'Framing Crew', zone: 'Zone C — North Exterior',          task: 'Layout',       alert_count: 0, alerts: [] },
+      { date: _isoDay(6), team_name: 'Framing Crew', zone: 'Zone C — North Exterior',          task: 'Layout',       alert_count: 0, alerts: [] },
+    ],
+    signals: { days_assigned: 6, total_alerts: 3, safety_alerts: 2, productivity_alerts: 1, flag: 'needs_training' },
+  },
+  // S. Patel — Concrete — neutral (4 days assigned, 0 alerts — not enough days for reward)
+  'w_s1_05': {
+    worker: { id: 'w_s1_05', name: 'S. Patel', trade: 'Concrete', site_id: 's1' },
+    history: [
+      { date: _isoDay(0), team_name: 'Concrete Pour', zone: 'Zone A — Ground Level West', task: 'Foundation pour', alert_count: 0, alerts: [] },
+      { date: _isoDay(1), team_name: 'Concrete Pour', zone: 'Zone A — Ground Level West', task: 'Foundation pour', alert_count: 0, alerts: [] },
+      { date: _isoDay(2), team_name: '',               zone: '',                           task: '',               alert_count: 0, alerts: [] },
+      { date: _isoDay(3), team_name: '',               zone: '',                           task: '',               alert_count: 0, alerts: [] },
+      { date: _isoDay(4), team_name: 'Concrete Pour', zone: 'Zone A — Ground Level West', task: 'Slab work',      alert_count: 0, alerts: [] },
+      { date: _isoDay(5), team_name: 'Concrete Pour', zone: 'Zone A — Ground Level West', task: 'Slab work',      alert_count: 0, alerts: [] },
+      { date: _isoDay(6), team_name: '',               zone: '',                           task: '',               alert_count: 0, alerts: [] },
+    ],
+    signals: { days_assigned: 4, total_alerts: 0, safety_alerts: 0, productivity_alerts: 0, flag: 'neutral' },
+  },
+}

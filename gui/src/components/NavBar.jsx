@@ -1,4 +1,4 @@
-export default function NavBar({ mode, setMode, urgentCount, totalFrames }) {
+export default function NavBar({ mode, setMode, urgentCount }) {
   return (
     <header style={{
       borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -16,31 +16,55 @@ export default function NavBar({ mode, setMode, urgentCount, totalFrames }) {
             fontWeight: 800, fontSize: 14, color: '#fff',
             boxShadow: '0 4px 16px rgba(249,115,22,0.25)',
           }}>IS</div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em' }}>IronSite Manager</div>
-            <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: '#64748B', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Spatial Intelligence</div>
-          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em' }}>IronSite Manager</div>
         </div>
 
-        <div style={{
-          display: 'flex', background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 3,
-          border: '1px solid rgba(255,255,255,0.06)',
-        }}>
+        <nav style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
           {[
-            { id: 'review', label: 'Review', desc: 'Video summaries & planning' },
-            { id: 'teams', label: 'Teams', desc: 'Daily crew planning' },
-            { id: 'live', label: 'Live', desc: 'Streams & comms' },
-          ].map(m => (
-            <button key={m.id} onClick={() => setMode(m.id)} style={{
-              padding: '10px 24px', borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: mode === m.id ? 'rgba(249,115,22,0.15)' : 'transparent',
-              transition: 'all 0.2s',
-            }}>
-              <div style={{ fontSize: 14, fontWeight: mode === m.id ? 700 : 500, color: mode === m.id ? '#FB923C' : '#94A3B8' }}>{m.label}</div>
-              <div style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>{m.desc}</div>
-            </button>
-          ))}
-        </div>
+            { id: 'review', label: 'Review' },
+            { id: 'teams', label: 'Teams' },
+            { id: 'crew', label: 'Crew' },
+            { id: 'live', label: 'Live' },
+          ].map(m => {
+            const active = mode === m.id
+            return (
+              <button
+                key={m.id}
+                onClick={() => setMode(m.id)}
+                style={{
+                  padding: '12px 20px 14px',
+                  marginBottom: -1,
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  font: 'inherit',
+                  fontSize: 14,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? '#F8FAFC' : '#64748B',
+                  transition: 'color 0.2s',
+                }}
+              >
+                {m.label}
+                {active && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: 'calc(100% - 16px)',
+                      maxWidth: 80,
+                      height: 2,
+                      background: '#D97706',
+                      borderRadius: 1,
+                    }}
+                  />
+                )}
+              </button>
+            )
+          })}
+        </nav>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {urgentCount > 0 && (
@@ -51,14 +75,6 @@ export default function NavBar({ mode, setMode, urgentCount, totalFrames }) {
             }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', animation: 'pulse 2s infinite' }} />
               <span style={{ fontSize: 12, fontWeight: 600, color: '#FCA5A5', fontFamily: 'var(--mono)' }}>{urgentCount} urgent</span>
-            </div>
-          )}
-          {totalFrames > 0 && (
-            <div style={{
-              fontSize: 10, fontFamily: 'var(--mono)', color: '#64748B',
-              background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: 6,
-            }}>
-              {totalFrames} frames analyzed
             </div>
           )}
         </div>

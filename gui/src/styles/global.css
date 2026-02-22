@@ -30,3 +30,17 @@ button { font-family: inherit; color: inherit; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #2A3040; border-radius: 3px; }
+
+/* Dark dropdown for site select on Live page */
+.select-dark {
+  color-scheme: dark;
+  color: #e2e8f0;
+  background-color: var(--slate-800);
+}
+.select-dark option {
+  background-color: var(--slate-900);
+  color: #f1f5f9;
+}
+.select-dark:focus {
+  outline: none;
+}
