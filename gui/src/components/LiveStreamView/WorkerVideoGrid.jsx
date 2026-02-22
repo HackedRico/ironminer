@@ -22,7 +22,7 @@ export default function WorkerVideoGrid({ workerStreams, selectedIdentity, onSel
         border: `1px dashed ${C.border}`,
         aspectRatio: '16/9',
       }}>
-        <div style={{ fontSize: 40 }}>📡</div>
+        <img src="/Icons/no_wifi.svg" alt="" style={{ width: 48, height: 48, opacity: 0.7 }} />
         <div style={{ fontSize: 14, color: C.muted }}>Waiting for workers to join...</div>
         <div style={{ fontSize: 11, color: C.border, fontFamily: 'var(--mono)' }}>
           Workers connect via the headset app

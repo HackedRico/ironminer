@@ -3,9 +3,10 @@ import { DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSens
 import WorkerPool from '../components/TeamBoard/WorkerPool'
 import TeamCard from '../components/TeamBoard/TeamCard'
 import WorkerCard from '../components/TeamBoard/WorkerCard'
-import { fetchSiteWorkers, fetchTeams, createTeam, updateTeam, deleteTeam } from '../api/teams'
+import { fetchSiteWorkers, fetchTeams, createTeam, updateTeam, deleteTeam, autoAssignWorkers } from '../api/teams'
 import { fetchSites } from '../api/sites'
 import { MOCK_WORKERS, MOCK_SITES } from '../utils/mockData'
+import WorkerProfilePanel from '../components/WorkerProfilePanel'
 
 function todayISO() {
   return new Date().toISOString().split('T')[0]
@@ -24,6 +25,9 @@ export default function TeamsMode() {
   const [teams, setTeams] = useState([])         // Team[]
   const [usingMock, setUsingMock] = useState(false)
   const [activeWorker, setActiveWorker] = useState(null) // being dragged right now
+  const [selectedWorker, setSelectedWorker] = useState(null) // locker room panel
+  const [autoAssigning, setAutoAssigning] = useState(false)
+  const [autoAssignPlan, setAutoAssignPlan] = useState(null)
   // teamsReady gates localStorage writes — prevents wiping the cache during the
   // initial reset before the fetch (or localStorage read) has completed.
   const [teamsReady, setTeamsReady] = useState(false)
@@ -82,9 +86,10 @@ export default function TeamsMode() {
     localStorage.setItem(`ironsite_teams_${selectedSite}_${today}`, JSON.stringify(teams))
   }, [teams, teamsReady, selectedSite])
 
-  // ── Derived: which workers are unassigned ─────────────────────────────────
+  // ── Derived: which workers are unassigned; which teams are empty ───────────
   const assignedIds = new Set(teams.flatMap(t => t.worker_ids))
   const unassigned = workers.filter(w => !assignedIds.has(w.id))
+  const emptyTeams = teams.filter(t => !t.worker_ids?.length)
   const workerById = Object.fromEntries(workers.map(w => [w.id, w]))
 
   // ── Team CRUD helpers (optimistic) ────────────────────────────────────────
@@ -123,6 +128,39 @@ export default function TeamsMode() {
     if (!team) return
     const newIds = team.worker_ids.filter(id => id !== workerId)
     handleUpdateTeam(teamId, { worker_ids: newIds })
+  }
+
+  // ── Auto-assign (all empty teams, or a single team when teamId is passed) ───
+
+  async function handleAutoAssign(teamId = null) {
+    setAutoAssigning(true)
+    try {
+      const plan = await autoAssignWorkers(selectedSite, today, teamId || undefined)
+      setAutoAssignPlan(plan)
+    } catch (e) {
+      console.error('Auto-assign failed', e)
+    } finally {
+      setAutoAssigning(false)
+    }
+  }
+
+  async function applyAutoAssign() {
+    if (!autoAssignPlan) return
+    const byTeam = {}
+    for (const a of autoAssignPlan.assignments) {
+      if (!byTeam[a.team_id]) byTeam[a.team_id] = []
+      byTeam[a.team_id].push(a.worker_id)
+    }
+    const currentIds = (t) => t.worker_ids ?? []
+    for (const [teamId, newIds] of Object.entries(byTeam)) {
+      const team = teams.find(t => t.id === teamId)
+      if (!team) continue
+      const merged = [...new Set([...currentIds(team), ...newIds])]
+      await updateTeam(teamId, { worker_ids: merged })
+    }
+    const fresh = await fetchTeams(selectedSite, today).catch(() => null)
+    if (fresh) setTeams(fresh)
+    setAutoAssignPlan(null)
   }
 
   // ── Drag handlers ─────────────────────────────────────────────────────────
@@ -230,13 +268,31 @@ export default function TeamsMode() {
           maxHeight: 'calc(100vh - 120px)',
           overflowY: 'auto',
         }}>
-          <WorkerPool workers={unassigned} />
+          <WorkerPool workers={unassigned} onWorkerClick={setSelectedWorker} />
         </div>
 
         {/* ── Right: Teams ───────────────────────────────────────────────── */}
         <div>
-          {/* New team button sits at the top of the team column */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          {/* New team + Auto-assign buttons */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
+            <button
+              onClick={() => handleAutoAssign()}
+              disabled={autoAssigning || unassigned.length === 0 || emptyTeams.length === 0}
+              title={emptyTeams.length === 0 ? 'No empty teams to fill' : 'Suggest workers for all empty teams'}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '10px 16px', borderRadius: 10, border: 'none',
+                background: 'rgba(139,92,246,0.15)', color: '#a78bfa',
+                cursor: (autoAssigning || unassigned.length === 0 || emptyTeams.length === 0) ? 'not-allowed' : 'pointer',
+                fontSize: 14, fontWeight: 600,
+                opacity: (unassigned.length === 0 || emptyTeams.length === 0) ? 0.4 : 1,
+                transition: 'background 0.15s',
+              }}
+              onMouseOver={e => { if (!autoAssigning && unassigned.length > 0 && emptyTeams.length > 0) e.currentTarget.style.background = 'rgba(139,92,246,0.25)' }}
+              onMouseOut={e => e.currentTarget.style.background = 'rgba(139,92,246,0.15)'}
+            >
+              {autoAssigning ? '…' : '✦'} Auto-assign empty teams
+            </button>
             <button
               onClick={handleCreateTeam}
               style={{
@@ -254,6 +310,12 @@ export default function TeamsMode() {
               <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> New Team
             </button>
           </div>
+
+          <AutoAssignBanner
+            plan={autoAssignPlan}
+            onApply={applyAutoAssign}
+            onDismiss={() => setAutoAssignPlan(null)}
+          />
 
           {teams.length === 0 ? (
             <div style={{
@@ -276,6 +338,9 @@ export default function TeamsMode() {
                 onUpdate={patch => handleUpdateTeam(team.id, patch)}
                 onDelete={() => handleDeleteTeam(team.id)}
                 onRemoveWorker={workerId => handleRemoveWorker(team.id, workerId)}
+                onWorkerClick={setSelectedWorker}
+                onAutoAssign={emptyTeams.some(t => t.id === team.id) ? () => handleAutoAssign(team.id) : undefined}
+                autoAssigning={autoAssigning}
               />
             ))
           )}
@@ -290,6 +355,85 @@ export default function TeamsMode() {
           </div>
         ) : null}
       </DragOverlay>
+
+      {selectedWorker && (
+        <WorkerProfilePanel
+          worker={selectedWorker}
+          siteId={selectedSite}
+          onClose={() => setSelectedWorker(null)}
+        />
+      )}
     </DndContext>
+  )
+}
+
+function AutoAssignBanner({ plan, onApply, onDismiss }) {
+  if (!plan) return null
+  return (
+    <div style={{
+      marginBottom: 16, borderRadius: 10,
+      border: '1px solid rgba(139,92,246,0.25)',
+      background: 'rgba(139,92,246,0.06)', padding: '14px 16px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 13, color: '#a78bfa', fontWeight: 700 }}>
+          {plan.used_ai ? '✦ AI Suggestion' : '⚡ Smart Match'}
+        </span>
+        {!plan.used_ai && (
+          <span style={{
+            fontSize: 10, color: '#64748b', fontFamily: 'var(--mono)',
+            background: 'rgba(255,255,255,0.05)', padding: '1px 6px', borderRadius: 4,
+          }}>
+            FALLBACK
+          </span>
+        )}
+      </div>
+      <p style={{ margin: '0 0 12px', fontSize: 13, color: '#94a3b8', lineHeight: 1.6 }}>
+        {plan.summary}
+      </p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+        {plan.assignments.length === 0
+          ? <span style={{ fontSize: 13, color: '#475569' }}>No assignments suggested.</span>
+          : plan.assignments.map(a => (
+              <span
+                key={a.worker_id}
+                title={a.reason}
+                style={{
+                  fontSize: 12, padding: '3px 10px', borderRadius: 20,
+                  background: 'rgba(139,92,246,0.12)', color: '#c4b5fd',
+                  border: '1px solid rgba(139,92,246,0.2)',
+                  cursor: 'default',
+                }}
+              >
+                {a.worker_name} → {a.team_name}
+              </span>
+            ))
+        }
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={onApply}
+          disabled={plan.assignments.length === 0}
+          style={{
+            padding: '7px 16px', borderRadius: 7, border: 'none',
+            background: '#7c3aed', color: '#fff', fontSize: 13, fontWeight: 600,
+            cursor: plan.assignments.length === 0 ? 'not-allowed' : 'pointer',
+            opacity: plan.assignments.length === 0 ? 0.5 : 1,
+          }}
+        >
+          Apply All
+        </button>
+        <button
+          onClick={onDismiss}
+          style={{
+            padding: '7px 14px', borderRadius: 7,
+            border: '1px solid rgba(255,255,255,0.08)',
+            background: 'none', color: '#64748b', fontSize: 13, cursor: 'pointer',
+          }}
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
   )
 }

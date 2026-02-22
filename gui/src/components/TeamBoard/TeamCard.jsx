@@ -31,7 +31,7 @@ const TRADE_TEXT = {
  * - Drop zone for incoming workers
  * - Delete button
  */
-export default function TeamCard({ team, workers, zones, onUpdate, onDelete, onRemoveWorker }) {
+export default function TeamCard({ team, workers, zones, onUpdate, onDelete, onRemoveWorker, onWorkerClick, onAutoAssign, autoAssigning }) {
   const [editingName, setEditingName] = useState(false)
   const [nameVal, setNameVal] = useState(team.name)
   const [taskVal, setTaskVal] = useState(team.task || '')
@@ -116,6 +116,26 @@ export default function TeamCard({ team, workers, zones, onUpdate, onDelete, onR
         }}>
           {workers.length} {workers.length === 1 ? 'worker' : 'workers'}
         </span>
+
+        {/* Per-team auto-assign (empty teams only) */}
+        {onAutoAssign && (
+          <button
+            type="button"
+            onClick={onAutoAssign}
+            disabled={autoAssigning}
+            title="Suggest workers for this team"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(139,92,246,0.3)',
+              background: 'rgba(139,92,246,0.12)', color: '#a78bfa',
+              fontSize: 12, fontWeight: 600, cursor: autoAssigning ? 'not-allowed' : 'pointer',
+              opacity: autoAssigning ? 0.6 : 1,
+              transition: 'opacity 0.15s',
+            }}
+          >
+            {autoAssigning ? '…' : '✦'} Suggest
+          </button>
+        )}
 
         {/* Delete button */}
         <button
@@ -231,6 +251,7 @@ export default function TeamCard({ team, workers, zones, onUpdate, onDelete, onR
               worker={w}
               color={color}
               onRemove={() => onRemoveWorker(w.id)}
+              onWorkerClick={onWorkerClick ? () => onWorkerClick(w) : undefined}
             />
           ))
         )}
@@ -240,7 +261,7 @@ export default function TeamCard({ team, workers, zones, onUpdate, onDelete, onR
 }
 
 /** Compact worker chip inside a team card, with an ✕ to remove */
-function WorkerChip({ worker, color, onRemove }) {
+function WorkerChip({ worker, color, onRemove, onWorkerClick }) {
   const dotColor = TRADE_TEXT[worker.trade] || '#94a3b8'
   return (
     <div style={{
@@ -256,7 +277,14 @@ function WorkerChip({ worker, color, onRemove }) {
         width: 6, height: 6, borderRadius: '50%',
         background: dotColor, flexShrink: 0,
       }} />
-      {worker.name}
+      <span
+        onClick={onWorkerClick || undefined}
+        style={{ cursor: onWorkerClick ? 'pointer' : 'default', transition: 'color 0.1s' }}
+        onMouseOver={e => { if (onWorkerClick) e.currentTarget.style.color = '#fb923c' }}
+        onMouseOut={e =>  { if (onWorkerClick) e.currentTarget.style.color = '#e2e8f0' }}
+      >
+        {worker.name}
+      </span>
       <button
         onClick={onRemove}
         title="Return to unassigned"

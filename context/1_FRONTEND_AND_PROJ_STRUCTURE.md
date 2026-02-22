@@ -83,7 +83,7 @@ ironminer/
 ├── app/                             # ── FASTAPI BACKEND ──
 │   ├── __init__.py
 │   ├── main.py                      # FastAPI app: CORS, mounts all routers at /api/*
-│   ├── config.py                    # Env vars: ANTHROPIC_API_KEY, VESTAI_API_KEY, etc.
+│   ├── config.py                    # Env vars: ANTHROPIC_API_KEY, VASTAI_API_KEY, etc.
 │   │
 │   ├── models/                      # Pydantic schemas (shared between routers and agents)
 │   │   ├── site.py                  # Site, Zone, ZoneStatus, SiteCreate

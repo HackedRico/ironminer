@@ -8,7 +8,7 @@ import WorkerCard from './WorkerCard'
  * Workers are displayed grouped by trade. A search box filters by name
  * or trade — useful when a superintendent needs to find someone quickly.
  */
-export default function WorkerPool({ workers }) {
+export default function WorkerPool({ workers, onWorkerClick }) {
   const [query, setQuery] = useState('')
   const { setNodeRef, isOver } = useDroppable({ id: 'pool' })
 
@@ -128,7 +128,7 @@ export default function WorkerPool({ workers }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {tradeWorkers.map(w => (
-                <WorkerCard key={w.id} worker={w} compact />
+                <WorkerCard key={w.id} worker={w} compact onClick={onWorkerClick ? () => onWorkerClick(w) : undefined} />
               ))}
             </div>
           </div>
