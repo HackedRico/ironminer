@@ -1,3 +1,4 @@
+setuptools>=68.0.0
 fastapi>=0.129.0
 uvicorn>=0.24,<0.32
 python-multipart>=0.0.22
