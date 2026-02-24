@@ -21,8 +21,10 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
-# NVIDIA (Grounding DINO + NV-CLIP + Parakeet — all use the same key)
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", os.getenv("NVIDIA_PARAKEET_API_KEY", ""))
+# NVIDIA keys
+NVIDIA_API_KEY  = os.getenv("NVIDIA_API_KEY", os.getenv("NVIDIA_PARAKEET_API_KEY", ""))  # Grounding DINO + Parakeet fallback
+NVIDIA_DINO_KEY = NVIDIA_API_KEY
+NVIDIA_CLIP_KEY = os.getenv("NVIDIA_EMBED_API_KEY", NVIDIA_API_KEY)  # NV-CLIP; falls back to NVIDIA_API_KEY
 
 # Vast.ai GPU instance
 VASTAI_API_KEY = os.getenv("VASTAI_API_KEY", "")

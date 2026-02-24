@@ -96,7 +96,7 @@ export default function WorkerSimulator() {
     setStatus('connecting')
     try {
       const [videoTrack, audioTrack] = await Promise.all([
-        createLocalVideoTrack(),
+        createLocalVideoTrack({ facingMode: 'environment' }),
         createLocalAudioTrack(),
       ])
       localVideoTrackRef.current = videoTrack

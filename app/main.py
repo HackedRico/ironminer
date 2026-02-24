@@ -17,6 +17,7 @@ from app.routers import (
 )
 
 from app.services.team_service import initialize as initialize_teams
+from app.services.world_service import initialize as initialize_worlds
 
 app = FastAPI(title="IronSite Manager API", version="0.1.0")
 
@@ -30,6 +31,7 @@ app.add_middleware(
 
 # Load persisted workers + teams from JSON (seeds defaults on first run)
 initialize_teams()
+initialize_worlds()
 
 # Uploads directory
 UPLOAD_DIR = Path("uploads")

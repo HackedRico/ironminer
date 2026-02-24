@@ -95,6 +95,7 @@ export default function LiveStreamView({
   selectedWorkerIdentity: controlledSelectedWorker,
   onSelectWorker,
   onNoteSaved,
+  workerDbId,
 }) {
   const [internalSelectedWorker, setInternalSelectedWorker] = useState(null)
   const [noteState, setNoteState] = useState('idle') // idle | recording | saving | saved | error
@@ -257,11 +258,13 @@ export default function LiveStreamView({
   // ── Frame inspection: capture current video frame → open FrameInspector ──
   const handleInspect = useCallback(() => {
     const v = activeVideoRef.current
-    if (!v || !v.videoWidth) return
+    if (!v) return
+    const w = v.videoWidth || 640
+    const h = v.videoHeight || 480
     const canvas = document.createElement('canvas')
-    canvas.width = v.videoWidth
-    canvas.height = v.videoHeight
-    canvas.getContext('2d').drawImage(v, 0, 0)
+    canvas.width = w
+    canvas.height = h
+    canvas.getContext('2d').drawImage(v, 0, 0, w, h)
     setInspectorFrame(canvas.toDataURL('image/jpeg', 0.85))
   }, [])
 
@@ -484,6 +487,7 @@ export default function LiveStreamView({
           feedId={selectedFeed?.id || 'unknown'}
           siteId={site?.id || 'unknown'}
           workerIdentity={selectedWorkerIdentity}
+          workerId={workerDbId}
           onClose={() => setInspectorFrame(null)}
           onSaved={(obj) => {
             setInspectorFrame(null)

@@ -9,6 +9,7 @@ GET  /feed/{feed_id}            → list embedded objects for a feed
 from __future__ import annotations
 
 import asyncio
+import math
 import uuid
 from datetime import datetime, timezone
 
@@ -19,9 +20,20 @@ from app.models.embedding import (
     DetectionResult,
     EmbedObjectCreate,
     EmbeddedObject,
+    SimilarRequest,
+    SimilarResult,
 )
 from app.services import nvidia
 from app.services.storage import EMBEDDINGS
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    mag_a = math.sqrt(sum(x * x for x in a))
+    mag_b = math.sqrt(sum(x * x for x in b))
+    if mag_a == 0.0 or mag_b == 0.0:
+        return 0.0
+    return dot / (mag_a * mag_b)
 
 router = APIRouter()
 
@@ -34,7 +46,7 @@ async def detect_objects(body: DetectRequest):
     if not body.image_b64:
         raise HTTPException(400, "image_b64 is required")
     try:
-        detections = await nvidia.detect_objects(body.image_b64)
+        detections = await nvidia.detect_objects(body.image_b64, prompt=body.prompt)
         return detections
     except Exception as exc:
         raise HTTPException(502, f"Detection failed: {exc}") from exc
@@ -97,6 +109,16 @@ async def embed_object(body: EmbedObjectCreate):
     return obj
 
 
+# ── Admin ──────────────────────────────────────────────────────────────────────
+
+@router.delete("/all")
+async def clear_all_embeddings():
+    """Delete every stored embedding (dev/reset use only)."""
+    count = len(EMBEDDINGS)
+    EMBEDDINGS.clear()
+    return {"deleted": count}
+
+
 # ── Listing ────────────────────────────────────────────────────────────────────
 
 @router.get("/worker/{worker_identity}", response_model=list[EmbeddedObject])
@@ -117,3 +139,47 @@ async def list_feed_embeddings(feed_id: str):
         if obj.feed_id == feed_id
     ]
     return sorted(results, key=lambda o: o.created_at, reverse=True)
+
+
+# ── Similarity search ───────────────────────────────────────────────────────────
+
+@router.post("/similar", response_model=list[SimilarResult])
+async def find_similar(body: SimilarRequest):
+    """
+    Embed the provided frame with NV-CLIP, then rank all stored EmbeddedObjects
+    by cosine similarity to that embedding.  Optionally scoped to a worker or feed.
+    Returns up to top_k results above the similarity threshold, best match first.
+    """
+    if not body.frame_b64:
+        raise HTTPException(400, "frame_b64 is required")
+
+    # 1. Embed the current frame
+    try:
+        query_embedding = await nvidia.create_embedding(body.frame_b64)
+    except Exception as exc:
+        raise HTTPException(502, f"Embedding failed: {exc}") from exc
+
+    # 2. Collect candidates (scoped by worker, feed, or all)
+    all_objects = list(EMBEDDINGS.values())
+    if body.worker_identity:
+        candidates = [o for o in all_objects if o.worker_identity == body.worker_identity]
+    elif body.feed_id:
+        candidates = [o for o in all_objects if o.feed_id == body.feed_id]
+    else:
+        candidates = all_objects
+
+    if not candidates:
+        return []
+
+    # 3. Score each candidate
+    scored: list[SimilarResult] = []
+    for obj in candidates:
+        if not obj.embedding:
+            continue
+        sim = _cosine_similarity(query_embedding, obj.embedding)
+        if sim >= body.threshold:
+            scored.append(SimilarResult(embedded_object=obj, similarity=round(sim, 4)))
+
+    # 4. Sort by similarity descending, return top_k
+    scored.sort(key=lambda r: r.similarity, reverse=True)
+    return scored[: body.top_k]

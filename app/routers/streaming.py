@@ -24,6 +24,7 @@ from app.services import db
 from app.services.parakeet import transcribe_audio_base64
 from app.services.worldlabs import generate_world, poll_operation
 from app.services.storage import FEEDS, NOTES, WORLDS
+from app.services.world_service import save_worlds
 from app.models.streaming import SiteWorld
 
 from app.services.livekit_service import (
@@ -287,11 +288,13 @@ async def _run_world_generation(
                     WORLDS[world_id].world_id = status.get("world_id")
                     WORLDS[world_id].marble_url = status.get("marble_url")
                     WORLDS[world_id].worldvr_url = status.get("worldvr_url")
+                await asyncio.to_thread(save_worlds)
                 break
     except Exception as exc:
         if world_id in WORLDS:
             WORLDS[world_id].status = "error"
             WORLDS[world_id].error = str(exc)
+            await asyncio.to_thread(save_worlds)
     finally:
         # Clean up uploaded temp file
         if tmp_to_delete and os.path.exists(tmp_to_delete):
@@ -337,6 +340,7 @@ async def submit_world(
         created_at=datetime.now(timezone.utc),
     )
     WORLDS[world_id] = world
+    asyncio.create_task(asyncio.to_thread(save_worlds))
     asyncio.create_task(
         _run_world_generation(world_id, input_type, file_path, None, display_name, text_prompt)
     )
@@ -418,6 +422,7 @@ async def submit_world_from_frames(body: FramesWorldRequest):
         created_at=datetime.now(timezone.utc),
     )
     WORLDS[world_id] = world
+    asyncio.create_task(asyncio.to_thread(save_worlds))
 
     async def _run():
         try:
@@ -443,11 +448,13 @@ async def submit_world_from_frames(body: FramesWorldRequest):
                         WORLDS[world_id].world_id = status.get("world_id")
                         WORLDS[world_id].marble_url = status.get("marble_url")
                         WORLDS[world_id].worldvr_url = status.get("worldvr_url")
+                    await asyncio.to_thread(save_worlds)
                     break
         except Exception as exc:
             if world_id in WORLDS:
                 WORLDS[world_id].status = "error"
                 WORLDS[world_id].error = str(exc)
+                await asyncio.to_thread(save_worlds)
         finally:
             import shutil as _shutil
             try:

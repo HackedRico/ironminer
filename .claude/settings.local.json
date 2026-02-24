@@ -15,7 +15,8 @@
       "Bash(.venv/Scripts/python:*)",
       "Bash(curl:*)",
       "Bash(cd /c/Users/chukw/Desktop/Programming/ironminer && python -c \"from app.routers.streaming import router; print\\('OK'\\)\" 2>&1)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(echo === embed \\(should succeed now\\) ===:*)"
     ]
   }
 }

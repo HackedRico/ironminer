@@ -3,6 +3,9 @@ import { fetchWorkerHistory } from '../api/teams'
 import { fetchWorkerNotes } from '../api/streaming'
 import { fetchWorkerEmbeddings } from '../api/embeddings'
 import { MOCK_WORKER_HISTORY } from '../utils/mockData'
+import GlbViewer from './GlbViewer'
+
+const SITE_MAP_URL = '/worlds/modern-office.glb'
 
 const TRADE_COLORS = {
   'Concrete':       { bg: 'rgba(96,165,250,0.14)',  text: '#93c5fd' },
@@ -47,6 +50,7 @@ export default function WorkerProfilePanel({ worker, siteId, onClose }) {
   const [loading, setLoading] = useState(true)
   const [notes, setNotes]     = useState([])
   const [embeds, setEmbeds]   = useState([])
+  const [showMap, setShowMap] = useState(false)
 
   const handleKey = useCallback((e) => { if (e.key === 'Escape') onClose() }, [onClose])
 
@@ -259,6 +263,27 @@ export default function WorkerProfilePanel({ worker, siteId, onClose }) {
                     {embeds.map(obj => <EmbedItem key={obj.id} obj={obj} />)}
                   </div>
                 )}
+              </div>
+
+              {/* 3D Site Map */}
+              <div style={{ marginTop: 24 }}>
+                <button
+                  onClick={() => setShowMap(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    padding: 0, marginBottom: showMap ? 10 : 0,
+                  }}
+                >
+                  <span style={{
+                    fontSize: 9, color: '#475569', textTransform: 'uppercase',
+                    letterSpacing: '0.1em', fontFamily: 'var(--mono)',
+                  }}>
+                    3D Site Map
+                  </span>
+                  <span style={{ fontSize: 10, color: '#334155' }}>{showMap ? '▲' : '▼'}</span>
+                </button>
+                {showMap && <GlbViewer url={SITE_MAP_URL} height={300} />}
               </div>
             </>
           )}

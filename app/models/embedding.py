@@ -36,3 +36,17 @@ class EmbedObjectCreate(BaseModel):
 
 class DetectRequest(BaseModel):
     image_b64: str          # base64 JPEG of the frame to detect objects in
+    prompt: Optional[str] = None  # what to look for, e.g. "valve . pipe . fire extinguisher"
+
+
+class SimilarRequest(BaseModel):
+    frame_b64: str                  # current frame to compare against stored embeddings
+    worker_identity: Optional[str] = None  # narrow search to this worker's objects
+    feed_id: Optional[str] = None   # fallback scope if no worker_identity
+    top_k: int = 8                  # max results to return
+    threshold: float = 0.25         # minimum cosine similarity to include
+
+
+class SimilarResult(BaseModel):
+    embedded_object: EmbeddedObject
+    similarity: float               # 0.0–1.0 cosine similarity score

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import LiveStreamView from '../components/LiveStreamView'
 import LiveWorkerFeedCard from '../components/LiveStreamView/LiveWorkerFeedCard'
-import { fetchFeeds, fetchSiteNotes, fetchWorkers as fetchLiveWorkers, submitSiteWorld, submitWorldFromFrames, fetchWorldStatus } from '../api/streaming'
+import WorkerProfilePanel from '../components/WorkerProfilePanel'
+import { fetchFeeds, fetchSiteNotes, fetchWorkers as fetchLiveWorkers, submitSiteWorld, submitWorldFromFrames, fetchWorldStatus, fetchSiteWorlds } from '../api/streaming'
 import { fetchSites } from '../api/sites'
 import { fetchSiteWorkers, fetchTeams } from '../api/teams'
 import { MOCK_FEEDS, MOCK_SITES, MOCK_WORKERS } from '../utils/mockData'
@@ -307,7 +308,97 @@ function SiteScanPanel({ worldJob, liveWorkerStream, workerName, selectedWorkerI
   )
 }
 
-function WorkerRow({ worker, isLive, selected, onClick }) {
+function PastWorldsList({ worlds }) {
+  if (!worlds || worlds.length === 0) return null
+
+  const fmt = (iso) => {
+    const d = new Date(iso)
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  return (
+    <div style={{
+      marginTop: 8,
+      borderRadius: 10,
+      border: '1px solid rgba(255,255,255,0.07)',
+      background: 'rgba(255,255,255,0.02)',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '8px 14px 7px',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        fontSize: 9, fontFamily: 'var(--mono)', color: '#475569', letterSpacing: '0.1em',
+      }}>
+        PAST WORLDS  ·  {worlds.length}
+      </div>
+      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+        {worlds.map(w => (
+          <div key={w.id} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 14px',
+            borderBottom: '1px solid rgba(255,255,255,0.04)',
+          }}>
+            {/* Date + source */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, marginBottom: 1 }}>
+                {fmt(w.created_at)}
+              </div>
+              <div style={{
+                fontSize: 10, color: '#475569',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {w.worker_identity || 'File upload'}
+              </div>
+            </div>
+
+            {/* Status chip */}
+            <span style={{
+              fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 700, letterSpacing: '0.06em',
+              padding: '2px 6px', borderRadius: 3, flexShrink: 0,
+              background: w.status === 'done' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+              color: w.status === 'done' ? '#22c55e' : '#ef4444',
+            }}>
+              {w.status === 'done' ? 'DONE' : 'ERROR'}
+            </span>
+
+            {/* Open buttons */}
+            {w.status === 'done' && (
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                <button
+                  onClick={() => window.open(w.marble_url, '_blank')}
+                  title="Open 3D World"
+                  style={{
+                    padding: '4px 8px', borderRadius: 5, border: 'none',
+                    background: '#22c55e', color: '#0a0f0a',
+                    fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                  }}
+                >
+                  Open
+                </button>
+                {w.worldvr_url && (
+                  <button
+                    onClick={() => window.open(w.worldvr_url, '_blank')}
+                    title="Open in VR"
+                    style={{
+                      padding: '4px 7px', borderRadius: 5,
+                      border: '1px solid rgba(34,197,94,0.3)',
+                      background: 'rgba(34,197,94,0.08)', color: '#22c55e',
+                      fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    VR
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function WorkerRow({ worker, isLive, selected, onClick, onProfile }) {
   const tradeColor = TRADE_COLORS[worker.trade] || '#64748B'
   return (
     <button
@@ -359,11 +450,30 @@ function WorkerRow({ worker, isLive, selected, onClick }) {
           {worker.trade}
         </span>
       )}
+
+      {/* Profile icon — opens WorkerProfilePanel */}
+      {onProfile && (
+        <span
+          role="button"
+          tabIndex={0}
+          title="View profile & embedded objects"
+          onClick={e => { e.stopPropagation(); onProfile(worker) }}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onProfile(worker) } }}
+          style={{ color: '#334155', display: 'flex', cursor: 'pointer', padding: '2px 2px', borderRadius: 4, flexShrink: 0 }}
+          onMouseOver={e => e.currentTarget.style.color = '#64748b'}
+          onMouseOut={e => e.currentTarget.style.color = '#334155'}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" strokeLinecap="round" />
+          </svg>
+        </span>
+      )}
     </button>
   )
 }
 
-function TeamSection({ team, workers, liveWorkerStreams, selectedWorkerIdentity, onSelectWorker }) {
+function TeamSection({ team, workers, liveWorkerStreams, selectedWorkerIdentity, onSelectWorker, onProfile }) {
   const color = TEAM_COLORS[team.color_index % 8]
   const liveCount = workers.filter(w => getLiveIdentityForWorker(w, liveWorkerStreams)).length
 
@@ -416,6 +526,7 @@ function TeamSection({ team, workers, liveWorkerStreams, selectedWorkerIdentity,
               isLive={!!liveId}
               selected={liveId === selectedWorkerIdentity}
               onClick={() => onSelectWorker(liveId ?? null)}
+              onProfile={onProfile}
             />
           )
         })
@@ -442,6 +553,8 @@ export default function LiveMode() {
   const [siteTeams, setSiteTeams] = useState([])
   const [worldJob, setWorldJob] = useState(null)
   const [worldPolling, setWorldPolling] = useState(false)
+  const [pastWorlds, setPastWorlds] = useState([])
+  const [profileWorker, setProfileWorker] = useState(null)
 
   const today = todayISO()
 
@@ -506,6 +619,22 @@ export default function LiveMode() {
       .catch(() => setSiteTeams([]))
   }, [selectedSite])
 
+  // Load world generation history for the selected site
+  useEffect(() => {
+    if (!selectedSite) return
+    fetchSiteWorlds(selectedSite).then(worlds => {
+      setPastWorlds(worlds)
+      // If we navigated away mid-generation, resume polling for the most recent in-progress job
+      if (!worldJob) {
+        const inProgress = worlds.find(w => w.status === 'generating')
+        if (inProgress) {
+          setWorldJob(inProgress)
+          setWorldPolling(true)
+        }
+      }
+    }).catch(() => {})
+  }, [selectedSite])
+
   // Poll world generation status every 15s
   useEffect(() => {
     if (!worldPolling || !worldJob) return
@@ -513,7 +642,10 @@ export default function LiveMode() {
       try {
         const updated = await fetchWorldStatus(worldJob.id)
         setWorldJob(updated)
-        if (updated.status === 'done' || updated.status === 'error') setWorldPolling(false)
+        if (updated.status === 'done' || updated.status === 'error') {
+          setWorldPolling(false)
+          if (selectedSite) fetchSiteWorlds(selectedSite).then(setPastWorlds).catch(() => {})
+        }
       } catch { setWorldPolling(false) }
     }, 15_000)
     return () => clearInterval(id)
@@ -552,6 +684,22 @@ export default function LiveMode() {
   const assignedIds = new Set(siteTeams.flatMap(t => t.worker_ids))
   const unassignedWorkers = siteWorkers.filter(w => !assignedIds.has(w.id))
 
+  // Resolve the LiveKit participant identity → database worker ID so embedded
+  // objects are stored with the canonical worker.id that WorkerProfilePanel uses.
+  const selectedWorkerDbId = useMemo(() => {
+    if (!selectedWorkerIdentity) return null
+    // Direct match: LiveKit identity IS the worker's database ID
+    const byId = siteWorkers.find(w => w.id === selectedWorkerIdentity)
+    if (byId) return byId.id
+    // Match by participant display name
+    const participantName = liveWorkerStreams.get(selectedWorkerIdentity)?.participant?.name
+    if (participantName) {
+      const byName = siteWorkers.find(w => w.name === participantName)
+      if (byName) return byName.id
+    }
+    return null
+  }, [selectedWorkerIdentity, siteWorkers, liveWorkerStreams])
+
   const feedIdForParticipant = (participant) => {
     const identity = participant?.identity
     if (identity && workerFeedMap[identity]) return workerFeedMap[identity]
@@ -571,6 +719,13 @@ export default function LiveMode() {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 20 }}>
+      {profileWorker && (
+        <WorkerProfilePanel
+          worker={profileWorker}
+          siteId={selectedSite}
+          onClose={() => setProfileWorker(null)}
+        />
+      )}
 
       {/* ── Main feed ──────────────────────────────────────────────────────── */}
       <div>
@@ -583,6 +738,7 @@ export default function LiveMode() {
               selectedWorkerIdentity={selectedWorkerIdentity}
               onSelectWorker={setSelectedWorkerIdentity}
               onNoteSaved={handleNoteSaved}
+              workerDbId={selectedWorkerDbId}
             />
             <SiteScanPanel
               worldJob={worldJob}
@@ -593,6 +749,7 @@ export default function LiveMode() {
               onUpload={handleSiteWorldUpload}
               onReset={() => { setWorldJob(null); setWorldPolling(false) }}
             />
+            <PastWorldsList worlds={pastWorlds.filter(w => w.status === 'done')} />
           </>
         ) : (
           <>
@@ -712,6 +869,7 @@ export default function LiveMode() {
               onUpload={handleSiteWorldUpload}
               onReset={() => { setWorldJob(null); setWorldPolling(false) }}
             />
+            <PastWorldsList worlds={pastWorlds.filter(w => w.status === 'done')} />
           </>
         )}
       </div>
@@ -818,6 +976,7 @@ export default function LiveMode() {
                     isLive={!!liveId}
                     selected={liveId === selectedWorkerIdentity}
                     onClick={() => setSelectedWorkerIdentity(liveId ?? null)}
+                    onProfile={setProfileWorker}
                   />
                 )
               })
@@ -837,6 +996,7 @@ export default function LiveMode() {
                     liveWorkerStreams={liveWorkerStreams}
                     selectedWorkerIdentity={selectedWorkerIdentity}
                     onSelectWorker={setSelectedWorkerIdentity}
+                    onProfile={setProfileWorker}
                   />
                 ))}
                 {unassignedWorkers.length > 0 && (
@@ -859,6 +1019,7 @@ export default function LiveMode() {
                           isLive={!!liveId}
                           selected={liveId === selectedWorkerIdentity}
                           onClick={() => setSelectedWorkerIdentity(liveId ?? null)}
+                          onProfile={setProfileWorker}
                         />
                       )
                     })}

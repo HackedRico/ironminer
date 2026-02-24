@@ -13,7 +13,7 @@ Flow for embedding:
   1. POST to NV-CLIP endpoint with base64 data URI
   2. Return 512-dim float vector
 
-Both functions fall back to mock implementations when NVIDIA_API_KEY is absent.
+Both functions fall back to mock implementations when the respective API key is absent.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from typing import Optional
 import httpx
 from PIL import Image
 
-from app.config import NVIDIA_API_KEY
+from app.config import NVIDIA_DINO_KEY, NVIDIA_CLIP_KEY
 from app.models.embedding import DetectionResult
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ async def _upload_asset(client: httpx.AsyncClient, jpeg_bytes: bytes) -> str:
         ASSETS_URL,
         json={"contentType": "image/jpeg", "description": "Input image"},
         headers={
-            "Authorization": f"Bearer {NVIDIA_API_KEY}",
+            "Authorization": f"Bearer {NVIDIA_DINO_KEY}",
             "Content-Type": "application/json",
             "accept": "application/json",
         },
@@ -195,7 +195,7 @@ async def _poll_until_ready(client: httpx.AsyncClient, req_id: str) -> httpx.Res
         await asyncio.sleep(POLL_DELAY_SECS)
         resp = await client.get(
             f"{POLLING_URL}{req_id}",
-            headers={"Authorization": f"Bearer {NVIDIA_API_KEY}", "accept": "application/json"},
+            headers={"Authorization": f"Bearer {NVIDIA_DINO_KEY}", "accept": "application/json"},
             timeout=TIMEOUT_POLL,
         )
         if resp.status_code == 202:
@@ -226,109 +226,124 @@ async def _handle_success_response(resp: httpx.Response) -> Optional[list[Detect
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-async def detect_objects(image_b64: str) -> list[DetectionResult]:
+async def detect_objects(image_b64: str, prompt: Optional[str] = None) -> list[DetectionResult]:
     """
     Detect objects in a base64-encoded image using NVIDIA Grounding DINO.
-    Falls back to a single mock detection when NVIDIA_API_KEY is not set.
+    If prompt is provided it overrides DEFAULT_DETECT_PROMPT (e.g. "valve . pipe").
+    Falls back to a single mock detection when NVIDIA_API_KEY is not set OR the API call fails.
     """
-    if not NVIDIA_API_KEY:
-        print("[nvidia] No API key — returning mock detections")
+    if not NVIDIA_DINO_KEY:
+        print("[nvidia] No DINO key — returning mock detections")
         return _mock_detections()
 
-    raw = _decode_image(image_b64)
-    jpeg_bytes, orig_w, orig_h, res_w, res_h = _resize_for_detect(raw)
+    detect_prompt = prompt.strip() if prompt and prompt.strip() else DEFAULT_DETECT_PROMPT
 
-    async with httpx.AsyncClient() as client:
-        asset_id = await _upload_asset(client, jpeg_bytes)
+    try:
+        raw = _decode_image(image_b64)
+        jpeg_bytes, orig_w, orig_h, res_w, res_h = _resize_for_detect(raw)
 
-        body = {
-            "model": "Grounding-Dino",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": DEFAULT_DETECT_PROMPT},
-                        {"type": "media_url", "media_url": {"url": f"data:image/jpeg;asset_id,{asset_id}"}},
-                    ],
-                }
-            ],
-            "threshold": 0.3,
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {NVIDIA_API_KEY}",
-            "NVCF-INPUT-ASSET-REFERENCES": asset_id,
-            "NVCF-FUNCTION-ASSET-IDS": asset_id,
-        }
+        async with httpx.AsyncClient() as client:
+            asset_id = await _upload_asset(client, jpeg_bytes)
 
-        resp = await client.post(GROUNDING_DINO_URL, json=body, headers=headers, timeout=TIMEOUT_INFER)
+            body = {
+                "model": "Grounding-Dino",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": detect_prompt},
+                            {"type": "media_url", "media_url": {"url": f"data:image/jpeg;asset_id,{asset_id}"}},
+                        ],
+                    }
+                ],
+                "threshold": 0.3,
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {NVIDIA_DINO_KEY}",
+                "NVCF-INPUT-ASSET-REFERENCES": asset_id,
+                "NVCF-FUNCTION-ASSET-IDS": asset_id,
+            }
 
-        if resp.status_code == 200:
-            detections = await _handle_success_response(resp)
-        elif resp.status_code == 202:
-            req_id = resp.headers.get("NVCF-REQID")
-            if not req_id:
-                raise RuntimeError("202 without NVCF-REQID header")
-            poll_resp = await _poll_until_ready(client, req_id)
-            detections = await _handle_success_response(poll_resp)
-        else:
-            resp.raise_for_status()
-            detections = None
+            resp = await client.post(GROUNDING_DINO_URL, json=body, headers=headers, timeout=TIMEOUT_INFER)
 
-        if detections is None:
-            return []
+            if resp.status_code == 200:
+                detections = await _handle_success_response(resp)
+            elif resp.status_code == 202:
+                req_id = resp.headers.get("NVCF-REQID")
+                if not req_id:
+                    raise RuntimeError("202 without NVCF-REQID header")
+                poll_resp = await _poll_until_ready(client, req_id)
+                detections = await _handle_success_response(poll_resp)
+            else:
+                resp.raise_for_status()
+                detections = None
 
-        return _scale_bboxes(detections, orig_w, orig_h, res_w, res_h)
+            if detections is None:
+                return []
+
+            return _scale_bboxes(detections, orig_w, orig_h, res_w, res_h)
+
+    except Exception as exc:
+        print(f"[nvidia] detect_objects failed ({exc}) — falling back to mock")
+        return _mock_detections()
 
 
 async def create_embedding(image_b64: str) -> list[float]:
     """
     Create a 512-dim visual embedding using NVIDIA NV-CLIP.
-    Falls back to a deterministic mock embedding when NVIDIA_API_KEY is not set.
+    Falls back to a deterministic mock embedding when NVIDIA_API_KEY is not set OR the API call fails.
     """
-    if not NVIDIA_API_KEY:
-        print("[nvidia] No API key — returning mock embedding")
+    if not NVIDIA_CLIP_KEY:
+        print("[nvidia] No CLIP key — returning mock embedding")
         return _mock_embedding(image_b64)
 
-    # Ensure data URI prefix
-    if not image_b64.startswith("data:"):
-        image_b64 = f"data:image/jpeg;base64,{image_b64}"
+    try:
+        # Ensure data URI prefix
+        if not image_b64.startswith("data:"):
+            image_b64 = f"data:image/jpeg;base64,{image_b64}"
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            NVCLIP_URL,
-            json={"input": [image_b64], "model": "nvidia/nvclip"},
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {NVIDIA_API_KEY}",
-            },
-            timeout=TIMEOUT_EMBED,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        embedding = data["data"][0]["embedding"]
-        if not isinstance(embedding, list):
-            raise RuntimeError("No embedding in NV-CLIP response")
-        return embedding
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                NVCLIP_URL,
+                json={"input": [image_b64], "model": "nvidia/nvclip"},
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {NVIDIA_CLIP_KEY}",
+                },
+                timeout=TIMEOUT_EMBED,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            embedding = data["data"][0]["embedding"]
+            if not isinstance(embedding, list):
+                raise RuntimeError("No embedding in NV-CLIP response")
+            return embedding
+
+    except Exception as exc:
+        print(f"[nvidia] create_embedding failed ({exc}) — falling back to mock")
+        return _mock_embedding(image_b64)
 
 
 def crop_image_b64(frame_b64: str, bbox: list[float]) -> str:
     """
     Crop a base64-encoded image to the given bbox [x1, y1, x2, y2].
     Returns the cropped region as a base64 JPEG string.
+    Falls back to the full image if the bbox is degenerate or out of bounds.
     """
     raw = _decode_image(frame_b64)
     img = Image.open(io.BytesIO(raw)).convert("RGB")
+    w, h = img.size
+
     x1, y1, x2, y2 = [int(v) for v in bbox]
     # Clamp to image bounds
-    w, h = img.size
-    x1, y1 = max(0, x1), max(0, y1)
-    x2, y2 = min(w, x2), min(h, y2)
+    x1, y1 = max(0, min(x1, w - 1)), max(0, min(y1, h - 1))
+    x2, y2 = max(x1 + 1, min(x2, w)), max(y1 + 1, min(y2, h))
+
+    # Sanity check: the region must be at least 1×1
     if x2 <= x1 or y2 <= y1:
-        # Degenerate bbox — return small center crop
-        cx, cy = w // 2, h // 2
-        size = min(w, h, 128) // 2
-        x1, y1, x2, y2 = cx - size, cy - size, cx + size, cy + size
+        x1, y1, x2, y2 = 0, 0, w, h
+
     cropped = img.crop((x1, y1, x2, y2))
     buf = io.BytesIO()
     cropped.save(buf, format="JPEG", quality=85)
